@@ -22,6 +22,7 @@ function Walker({ pet, remove }: {pet:Pet;remove:()=>void}) {
     const step=(now:number)=> {
       const dt=Math.min(.06,(now-last)/1000);last=now;
       const c=config.current,s=state.current,width=c.size,height=c.size*1.125;
+      s.target=Math.max(0,Math.min(innerWidth-width,s.target));
       if (!drag.current && !c.paused && !c.reaction && now>s.wait) {
         const dx=s.target-s.x;
         if (Math.abs(dx)<3) {s.target=Math.random()*Math.max(1,innerWidth-width);s.wait=now+1500+Math.random()*2000;setMoving(false);}
@@ -48,7 +49,7 @@ function App(){
  const [open,setOpen]=useState(true),[query,setQuery]=useState(''),[pets,setPets]=useState<Pet[]>([]),next=useRef(0);
  const entries=catalogue as Entry[]; const matches=entries.filter(row=>row.name.toLowerCase().includes(query.toLowerCase())).slice(0,40);
  useEffect(()=>window.companion?.onShow(()=>setOpen(true)),[]);
- useEffect(()=>{const publish=()=>window.companion?.regions(Array.from(document.querySelectorAll('.interactive')).map(el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};}));publish();const id=setInterval(publish,80);return()=>clearInterval(id);},[]);
+ useEffect(()=>{const publish=()=>window.companion?.regions(Array.from(document.querySelectorAll('.interactive, .pet-controls')).filter(el=>!el.classList.contains('pet-controls')||Number(getComputedStyle(el).opacity)>.1).map(el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};}));publish();const id=setInterval(publish,80);return()=>clearInterval(id);},[]);
  return <>{open?<aside className="panel interactive"><header><div><small>ARKPEDIA · DEV PREVIEW</small><h1>Desktop chibis</h1></div><button aria-label="Hide controls" onClick={()=>setOpen(false)}>−</button></header><p>Add a companion. Drag to move, tap to interact.</p><input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
  <div className="choices" aria-label="Available chibis">{matches.map(entry=><button key={entry.id} disabled={pets.length>=8} onClick={()=>setPets(p=>[...p,{id:++next.current,entry}])}><span>{entry.name}</span><b>+</b></button>)}</div>
  <footer><span>{pets.length?`${pets.length} on your desktop`:'Your desktop is ready'}{pets.length>=8?' · Limit reached':''}</span><button onClick={()=>window.companion?.quit()}>Quit</button></footer></aside>:<button className="launcher interactive" onClick={()=>setOpen(true)}>Chibis +</button>}
