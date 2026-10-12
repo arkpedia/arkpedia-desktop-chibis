@@ -5,7 +5,9 @@ A separate Windows/macOS companion. It has no account import, website storage, p
 ## Try it
 
 - macOS Apple Silicon: unzip `releases/Arkpedia-Chibis-Dev-0.1.0-mac-arm64.zip`, then open **Arkpedia Chibis Dev.app**.
+- Intel macOS: use `releases/Arkpedia-Chibis-Dev-0.1.0-mac-x64.zip`.
 - Windows x64: unzip `releases/Arkpedia-Chibis-Dev-0.1.0-win-x64.zip`, then open **Arkpedia Chibis Dev.exe**.
+- Windows ARM64: use `releases/Arkpedia-Chibis-Dev-0.1.0-win-arm64.zip`.
 - These are unsigned development builds. Native execution was checked on macOS; Windows needs testing on a Windows machine.
 
 Search for an operator or outfit and press +. Up to eight chibis can walk independently. Drag a chibi to place it; tap for its native reaction. Hover or focus it for size, pause, and remove controls. Arrow keys move a focused chibi; Escape removes it. Hide the picker with −. **Chibis +**, the menu-bar/tray entry, or the app menu opens it again. Quit exits the whole companion.
