@@ -6,7 +6,7 @@ import type { ChibiModel } from './lib/operators/chibi';
 import { chooseChibiTap } from './lib/operators/chibiRoutine';
 import './style.css';
 
-declare global { interface Window { companion?: { regions: (r: {x:number;y:number;width:number;height:number}[]) => void; dragging: (value:boolean) => void; quit: () => void; onShow: (callback:()=>void) => ()=>void } } }
+declare global { interface Window { companion?: { regions: (r: {x:number;y:number;width:number;height:number}[]) => void; dragging: (value:boolean) => void; minimize: () => void; quit: () => void; onShow: (callback:()=>void) => ()=>void } } }
 type Entry = { id:string; name:string; model:ChibiModel };
 type Pet = { id:number; entry:Entry };
 const noop = () => {};
@@ -50,9 +50,9 @@ function App(){
  const entries=catalogue as Entry[]; const matches=entries.filter(row=>row.name.toLowerCase().includes(query.toLowerCase())).slice(0,40);
  useEffect(()=>window.companion?.onShow(()=>setOpen(true)),[]);
  useEffect(()=>{const publish=()=>window.companion?.regions(Array.from(document.querySelectorAll('.interactive, .pet-controls')).filter(el=>!el.classList.contains('pet-controls')||Number(getComputedStyle(el).opacity)>.1).map(el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};}));publish();const id=setInterval(publish,80);return()=>clearInterval(id);},[]);
- return <>{open?<aside className="panel interactive"><header><div><small>ARKPEDIA · DEV PREVIEW</small><h1>Desktop chibis</h1></div><button aria-label="Hide controls" onClick={()=>setOpen(false)}>−</button></header><p>Add a companion. Drag to move, tap to interact.</p><input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
+ return <>{open?<aside className="panel interactive"><header><div><small>ARKPEDIA · DEV PREVIEW</small><h1>Desktop chibis</h1></div><button className="minimize" aria-label="Minimize companions" title="Minimize companions" onClick={()=>window.companion?.minimize()}>−</button></header><p>Add a companion. Drag to move, tap to interact.</p><input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
  <div className="choices" aria-label="Available chibis">{matches.map(entry=><button key={entry.id} disabled={pets.length>=8} onClick={()=>setPets(p=>[...p,{id:++next.current,entry}])}><span>{entry.name}</span><b>+</b></button>)}</div>
- <footer><span>{pets.length?`${pets.length} on your desktop`:'Your desktop is ready'}{pets.length>=8?' · Limit reached':''}</span><button onClick={()=>window.companion?.quit()}>Quit</button></footer></aside>:<button className="launcher interactive" onClick={()=>setOpen(true)}>Chibis +</button>}
+ <footer><span>{pets.length?`${pets.length} on your desktop`:'Your desktop is ready'}{pets.length>=8?' · Limit reached':''}</span><div className="footer-actions"><button onClick={()=>setOpen(false)}>Hide picker</button><button onClick={()=>window.companion?.quit()}>Quit</button></div></footer></aside>:<div className="launcher interactive"><button onClick={()=>setOpen(true)}>Chibis +</button><button className="minimize" aria-label="Minimize companions" title="Minimize companions" onClick={()=>window.companion?.minimize()}>−</button></div>}
  {pets.map(pet=><Walker key={pet.id} pet={pet} remove={()=>setPets(p=>p.filter(row=>row.id!==pet.id))}/>)}
  </>;
 }
