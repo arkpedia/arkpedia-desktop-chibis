@@ -3,6 +3,9 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+  # Packaging config is checked before it merges; only a tag publishes a release.
+  pull_request:
+    paths: ['package.json', 'package-lock.json', 'electron/**', '.github/workflows/release.yml']
 permissions:
   contents: read
 jobs:
