@@ -65,3 +65,5 @@ Renderer code runs sandboxed with context isolation and no Node integration. IPC
 ## Credits
 
 Arknights characters and artwork belong to their respective owners. Rendering uses the unmodified Spine Runtimes 3.8 (spine-ts WebGL); preserve `public/SPINE-LICENSE.txt` and the notices in `src/lib/vendor/spine-3.8` when redistributing. The Spine Runtimes License remains applicable.
+
+The app code carries no open-source licence yet (`UNLICENSED` in package.json); the owner decides before the repository is made public.

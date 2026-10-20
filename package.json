@@ -65,9 +65,10 @@
         "deb"
       ],
       "category": "Game",
-      "maintainer": "Arkpedia <noreply@arkpedia.net>",
+      "maintainer": "Arkpedia",
       "synopsis": "Arknights chibis walking on your desktop"
     }
   },
-  "license": "SEE LICENSE IN README.md"
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/arkpedia/arkpedia-desktop-chibis"
 }
