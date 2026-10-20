@@ -35,7 +35,7 @@ test('exactly one WebGL context and one scene renderer exist, both in the shared
   const stage = path.join('src', 'components', 'operators', 'ChibiStage.ts');
   assert.deepEqual(contexts, [stage]);
   assert.deepEqual(renderers, [stage]);
-  const constructor = files.find(({ file }) => file === stage).text.match(/constructor\([\s\S]*?\n  }\n/)[0];
+  const constructor = files.find(({ file }) => file === stage).text.match(/constructor\([\s\S]*?\r?\n  }\r?\n/)[0];
   assert.match(constructor, /ManagedWebGLRenderingContext/, 'created once per stage, not per chibi');
   assert.match(constructor, /premultipliedAlpha: true/);
   const app = files.find(({ file }) => file === path.join('src', 'main.tsx')).text;
