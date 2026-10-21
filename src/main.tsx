@@ -5,6 +5,7 @@ import catalogue from './catalogue.json';
 import limits from '../electron/limits.json';
 import type { ChibiModel } from './lib/operators/chibi';
 import { chibiActivities, chooseChibiTap } from './lib/operators/chibiRoutine';
+import { FURNITURE, furnitureBox } from './lib/operators/furniture';
 import './style.css';
 
 type Region = { x:number; y:number; width:number; height:number };
@@ -43,21 +44,21 @@ const chooseRest=(animations:{name:string;duration:number}[])=>{
   const acts=chibiActivities(animations);
   const pick=<T,>(list:T[])=>list[Math.floor(Math.random()*list.length)];
   const roll=Math.random();
-  if (roll<.35&&acts.sit.length){const p=pick(acts.sit);return {clip:p.name,loop:true,duration:6000+Math.random()*9000};}
-  if (roll<.55&&acts.sleep.length){const p=pick(acts.sleep);return {clip:p.name,loop:true,duration:12000+Math.random()*12000};}
-  if (roll<.72&&acts.special.length){const p=pick(acts.special);return {clip:p.name,loop:false,duration:Math.max(900,p.duration*1000)};}
-  return {clip:'',loop:true,duration:2200+Math.random()*2600};
+  if (roll<.35&&acts.sit.length){const p=pick(acts.sit);return {activity:'sit' as const,clip:p.name,loop:true,duration:6000+Math.random()*9000};}
+  if (roll<.55&&acts.sleep.length){const p=pick(acts.sleep);return {activity:'sleep' as const,clip:p.name,loop:true,duration:12000+Math.random()*12000};}
+  if (roll<.72&&acts.special.length){const p=pick(acts.special);return {activity:'special' as const,clip:p.name,loop:false,duration:Math.max(900,p.duration*1000)};}
+  return {activity:'idle' as const,clip:'',loop:true,duration:2200+Math.random()*2600};
 };
 
 function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;settings:Settings|null;displays:Area[]}) {
   const stage = useContext(StageContext);
   const [size,setSize]=useState(150), [paused,setPaused]=useState(false), [status,setStatus]=useState<'loading'|'ready'|'error'>('loading');
-  const [reaction,setReaction]=useState(''), [sequence,setSequence]=useState(0);
+  const [reaction,setReaction]=useState(''), [sequence,setSequence]=useState(0), [rest,setRest]=useState<'sit'|'sleep'|null>(null);
   const node=useRef<HTMLDivElement>(null), state=useRef({x:Math.random()*Math.max(1,innerWidth-220),y:Math.max(0,innerHeight-210),targetX:Math.random()*Math.max(1,innerWidth-220),targetY:Math.max(0,innerHeight-210),wait:0,resting:false});
   const drag=useRef<{x:number;y:number;startX:number;startY:number;moved:boolean}|null>(null), config=useRef({size,paused,reaction,walkHorizontal:true,walkVertical:false,lockToScreen:true,displays:[] as Area[]}); config.current={size,paused,reaction,walkHorizontal:settings?.walkHorizontal??true,walkVertical:settings?.walkVertical??false,lockToScreen:settings?.lockToScreen!==false,displays};
   // Read by the stage every frame; mutated here without re-rendering.
   const control=useRef({moving:true,flipped:false,reaction:'',sequence:0,pose:'',poseLoop:true}); control.current.reaction=reaction; control.current.sequence=sequence;
-  const animations=useRef<{name:string;duration:number}[]>([]), firstTap=useRef(true), spawned=useRef(false);
+  const animations=useRef<{name:string;duration:number}[]>([]), firstTap=useRef(true), spawned=useRef(false), furniture=useRef<HTMLImageElement>(null), restKind=useRef<'sit'|'sleep'|null>(null); restKind.current=rest;
   useEffect(()=>{
     if(spawned.current||!displays.length)return;
     spawned.current=true;
@@ -91,15 +92,16 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
         const dx=s.targetX-s.x, dy=s.targetY-s.y, distance=Math.hypot(dx,dy);
         if (s.resting) {
           // The rest is over: stand up, then pick somewhere new to walk to.
-          s.resting=false; m.pose='';
+          s.resting=false; m.pose=''; setRest(null);
           const next=pickTarget(areas,home,c.lockToScreen,width,height);
           s.targetX=c.walkHorizontal?next.x:s.x;
           s.targetY=c.walkVertical?next.y:s.y;
           m.moving=false;
         } else if (distance<3) {
-          const rest=chooseRest(animations.current);
-          s.resting=true; m.pose=rest.clip; m.poseLoop=rest.loop;
-          s.wait=now+rest.duration; m.moving=false;
+          const chosen=chooseRest(animations.current);
+          s.resting=true; m.pose=chosen.clip; m.poseLoop=chosen.loop;
+          setRest(chosen.activity==='sit'||chosen.activity==='sleep'?chosen.activity:null);
+          s.wait=now+chosen.duration; m.moving=false;
         } else {
           // One speed along the path, so a diagonal walk is not faster than a straight one.
           const step=Math.min(distance,dt*38);
@@ -109,6 +111,8 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
       } else m.moving=false;
       s.x=Math.max(0,Math.min(innerWidth-width,s.x));s.y=Math.max(0,Math.min(innerHeight-height,s.y));
       if(node.current){node.current.style.left=`${s.x}px`;node.current.style.top=`${s.y}px`;}
+      const kind=restKind.current, seat=furniture.current;
+      if(kind&&seat){const box=furnitureBox(width,kind);seat.style.left=`${s.x}px`;seat.style.top=`${s.y+box.top}px`;seat.style.width=`${box.width}px`;seat.style.height=`${box.height}px`;seat.style.transform=m.flipped?'scaleX(-1)':'';}
       frame=requestAnimationFrame(step);
     };
     // A drag released outside the window never reaches the element's pointerup.
@@ -118,15 +122,19 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
   },[]);
   function tap(){const next=chooseChibiTap(animations.current,firstTap.current);firstTap.current=false;if(next){setReaction(next.clip);setSequence(n=>n+1);}}
   // When clicks pass through chibis they stop being interactive, so main never takes the mouse.
-  return <div className={`pet${settings?.clickChibis?'':' interactive'}`} ref={node} style={{width:size,height:size*1.125}} role="group" aria-label={`${pet.entry.name} desktop chibi`} tabIndex={0} title="Tap to interact · Drag to move"
-    onPointerDown={e=>{if(e.button!==0||(e.target as Element).closest('button'))return;e.preventDefault();const parent=node.current!;parent.focus();parent.setPointerCapture(e.pointerId);drag.current={x:e.clientX-state.current.x,y:e.clientY-state.current.y,startX:e.clientX,startY:e.clientY,moved:false};window.companion?.dragging(true);}}
+  return <>
+    {rest&&<img className="furniture" ref={furniture} src={FURNITURE[rest].image} alt="" aria-hidden="true" draggable={false}
+      style={{maskImage:`url(${FURNITURE[rest].mask})`,WebkitMaskImage:`url(${FURNITURE[rest].mask})`}}/>}
+    <div className={`pet${settings?.clickChibis?'':' interactive'}`} ref={node} style={{width:size,height:size*1.125}} role="group" aria-label={`${pet.entry.name} desktop chibi`} tabIndex={0} title="Tap to interact · Drag to move"
+    onPointerDown={e=>{if(e.button!==0||(e.target as Element).closest('button'))return;e.preventDefault();setRest(null);restKind.current=null;control.current.pose='';const parent=node.current!;parent.focus();parent.setPointerCapture(e.pointerId);drag.current={x:e.clientX-state.current.x,y:e.clientY-state.current.y,startX:e.clientX,startY:e.clientY,moved:false};window.companion?.dragging(true);}}
     onPointerMove={e=>{const d=drag.current;if(!d)return;d.moved ||= Math.hypot(e.clientX-d.startX,e.clientY-d.startY)>5;state.current.x=e.clientX-d.x;state.current.y=e.clientY-d.y;}}
     onPointerUp={e=>{const d=drag.current;drag.current=null;window.companion?.dragging(false);if(d&&!d.moved)tap();if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
     onPointerCancel={()=>{drag.current=null;window.companion?.dragging(false);}}
     onKeyDown={e=>{if(e.target!==e.currentTarget)return;if(e.key==='Escape')remove();if(e.key==='Enter'||e.key===' '){e.preventDefault();tap();}if(e.key.startsWith('Arrow')){e.preventDefault();setPaused(true);state.current.x+=e.key==='ArrowLeft'?-20:e.key==='ArrowRight'?20:0;state.current.y+=e.key==='ArrowUp'?-20:e.key==='ArrowDown'?20:0;}}}>
     {status==='error'?<p role="status">This chibi could not load. Remove it and try again.</p>:status==='loading'?<p role="status">Loading chibi…</p>:null}
     <div className="pet-controls"><button aria-label="Smaller" disabled={size<=80} onClick={()=>setSize(n=>Math.max(80,n-20))}>−</button><button aria-label={paused?'Resume':'Pause'} onClick={()=>setPaused(v=>!v)}>{paused?'▶':'Ⅱ'}</button><button aria-label="Larger" disabled={size>=300} onClick={()=>setSize(n=>Math.min(300,n+20))}>+</button><button aria-label="Remove chibi" onClick={remove}>×</button></div>
-  </div>;
+    </div>
+  </>;
 }
 
 function Modes({settings}:{settings:Settings|null}){

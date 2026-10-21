@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chibiScale, chibiPlacement, chibiClip, finiteBounds } from '../src/lib/operators/chibiFraming.ts';
+import { furnitureBox, FURNITURE_HEIGHT } from '../src/lib/operators/furniture.ts';
 
 const idle = { x: -60, y: 0, width: 120, height: 200 };
 const box = { left: 300, top: 400, width: 150, height: 150 * 1.125 };
@@ -51,6 +52,18 @@ test('resting poses sit between reactions and idle, and never outrank walking', 
   assert.deepEqual(chibiClip(names, 'Relax', 'Move', true, '', 'Sit'), { clip: 'Move', loop: true });
   assert.deepEqual(chibiClip(names, 'Relax', 'Move', false, 'Interact', 'Sit'), { clip: 'Interact', loop: false });
   assert.deepEqual(chibiClip(names, 'Relax', 'Move', false, '', 'Missing'), { clip: 'Relax', loop: true });
+});
+
+test('furniture keeps the website box geometry', () => {
+  // The website places a 160x118 image in a 160x180 chibi box, 56 px (chair) or 62 px (bed) down.
+  const size = 160;
+  assert.equal(furnitureBox(size, 'sit').height, size * FURNITURE_HEIGHT);
+  assert.equal(furnitureBox(size, 'sit').top, 56);
+  assert.equal(furnitureBox(size, 'sleep').top, 62);
+  assert.equal(furnitureBox(size, 'sit').width, 160);
+  const half = furnitureBox(80, 'sit');
+  assert.equal(half.width, 80);
+  assert.equal(half.top, 28);
 });
 
 test('unmeasurable poses fall back to a sane box', () => {

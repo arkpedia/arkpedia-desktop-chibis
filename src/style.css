@@ -16,3 +16,6 @@ body.role-panel .choices{flex:1;max-height:none}
 .settings{display:flex;flex-direction:column;gap:14px;flex:1;min-height:0;overflow-y:auto}
 .danger{color:#ff9b9b;border-color:#5c3a3a;background:#2a1a1a}
 .danger:hover{background:#3a2222;border-color:#ff9b9b}
+
+/* Furniture sits behind the chibi canvas, so the chibi is drawn on top of it. */
+.furniture{position:fixed;z-index:1;pointer-events:none;user-select:none;mask-size:100% 100%;mask-repeat:no-repeat;-webkit-mask-size:100% 100%;-webkit-mask-repeat:no-repeat}

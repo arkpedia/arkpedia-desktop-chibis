@@ -168,9 +168,16 @@ export class ChibiStage {
       }
       if (!document.hidden) state.update(dt);
       state.apply(skeleton);
+      // Exposed for debugging and for tests that need to know what the shared stage chose.
+      if (node.dataset.clip !== clip) node.dataset.clip = clip;
+      if (node.dataset.pose !== (control.pose ?? '')) node.dataset.pose = control.pose ?? '';
       const rect = node.getBoundingClientRect();
       const place = chibiPlacement(shared.bounds, rect, height, control.flipped);
-      skeleton.x = place.x; skeleton.y = place.y; skeleton.scaleX = place.scaleX; skeleton.scaleY = place.scaleY;
+      // Native Sit lowers the hips below standing ground, and Sleep is authored above the
+      // mattress; lift those poses onto the furniture, as the website does (0.25 / 0.13 of
+      // the idle pose's height).
+      const lift = control.pose ? (/^sit/i.test(control.pose) ? .25 : /^sleep/i.test(control.pose) ? .13 : 0) : 0;
+      skeleton.x = place.x; skeleton.y = place.y + lift * shared.bounds.height * place.scaleY; skeleton.scaleX = place.scaleX; skeleton.scaleY = place.scaleY;
       skeleton.updateWorldTransform();
       renderer.drawSkeleton(skeleton, true);
     }

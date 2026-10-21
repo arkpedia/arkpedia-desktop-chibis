@@ -27,7 +27,7 @@ The app runs as **two windows**: the chibis live in a transparent, click-through
 
 Because the picker is just a window, minimizing it leaves the chibis walking; reopen it from the Dock/taskbar, the tray menu's **Show companion controls**, or by launching the app again. Closing the picker window quits the app, so there are no in-window quit or minimize buttons — the title bar already has them.
 
-Between walks a chibi sits, sleeps, idles or plays its special animation, chosen from whatever the model provides. **Settings → Remember my chibis** (on by default) saves the current set and restores it on the next launch; **Settings → Remove every chibi from the desktop** clears it. Artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
+Resting chibis use the same two pieces of furniture as the website: the **Black Retro Chair** for sitting and the **Porcelain Bed** for sleeping, fetched from `arkpedia-sd-assets` at a pinned commit together with their silhouette masks. Between walks a chibi sits, sleeps, idles or plays its special animation, chosen from whatever the model provides. **Settings → Remember my chibis** (on by default) saves the current set and restores it on the next launch; **Settings → Remove every chibi from the desktop** clears it. Artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
 
 ## Overlay modes
 
