@@ -10,10 +10,12 @@ Arknights chibis walking on your desktop, for macOS, Windows and Linux. A separa
 |---|---|
 | macOS, Apple Silicon (M1–M4) | [`Arkpedia-Chibis-Dev-mac-arm64.dmg`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-mac-arm64.dmg) |
 | macOS, Intel | [`Arkpedia-Chibis-Dev-mac-x64.dmg`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-mac-x64.dmg) |
-| Windows, most PCs | [`Arkpedia-Chibis-Dev-win-x64.exe`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-win-x64.exe) |
+| Windows 10/11, 64-bit (x86-64) | [`Arkpedia-Chibis-Dev-win-x64.exe`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-win-x64.exe) |
 | Windows on ARM | [`Arkpedia-Chibis-Dev-win-arm64.exe`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-win-arm64.exe) |
 | Linux, x86-64 | [`Arkpedia-Chibis-Dev-linux-x86_64.AppImage`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-linux-x86_64.AppImage) |
 | Linux, ARM64 | [`Arkpedia-Chibis-Dev-linux-arm64.AppImage`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-linux-arm64.AppImage) |
+
+There is no 32-bit Windows build: Electron no longer ships 32-bit Windows binaries, so Windows 10/11 64-bit or ARM64 are the only targets. The combined `Arkpedia-Chibis-Dev-win.exe` installer picks the right one automatically.
 
 Filenames never change between versions, so any of those links keeps working after a release: it always serves the newest build. Each platform also has a portable `.zip` (macOS, Windows) and a `.deb` (Linux) with the same naming, plus `SHA256SUMS.txt` on the release page.
 
