@@ -1,31 +1,69 @@
-# Arkpedia Chibis — development preview
+# Arkpedia Chibis — desktop companion
 
-A separate Windows/macOS companion. It has no account import, website storage, production routes, login, auto-start, or automatic updater. Its native transparent window stays on top independently of the browser, so minimizing a browser does not stop the companions.
+Arknights chibis walking on your desktop, for macOS, Windows and Linux. A separate app: no account import, website storage, login, auto-start or automatic updater.
 
 ## Try it
 
-- macOS Apple Silicon: unzip `releases/Arkpedia-Chibis-Dev-0.1.1-mac-arm64.zip`, then open **Arkpedia Chibis Dev.app**.
-- Intel macOS: use `releases/Arkpedia-Chibis-Dev-0.1.1-mac-x64.zip`.
-- Windows x64: unzip `releases/Arkpedia-Chibis-Dev-0.1.1-win-x64.zip`, then open **Arkpedia Chibis Dev.exe**.
-- Windows ARM64: use `releases/Arkpedia-Chibis-Dev-0.1.1-win-arm64.zip`.
-- These are unsigned development builds. Native execution was checked on macOS; Windows needs testing on a Windows machine.
+Download a package from this repository's **Releases** (built by CI on every `v*` tag), or build one locally (below). Builds are unsigned development previews.
 
-Search for an operator or outfit and press +. Up to eight chibis can walk independently. Drag a chibi to place it; tap for its native reaction. Hover or focus it for size, pause, and remove controls. Arrow keys move a focused chibi; Escape removes it. **−** minimizes the entire companion to the Windows taskbar or macOS Dock, preserving your chibis and settings until you quit. Click its taskbar/Dock icon to restore it. The tray/menu-bar entry and app menu also offer **Show companion controls** and **Minimize companions**; Ctrl+M (Windows) or Cmd+M (macOS) minimizes it too. **Hide picker** keeps the chibis walking and leaves a compact **Chibis +** launcher with its own minimize button. Quit exits the whole companion.
+- macOS: `.dmg` or `.zip`, Apple Silicon (`arm64`) or Intel (`x64`). Unsigned, so the first open needs right-click → Open.
+- Windows: `.exe` installer (NSIS) or portable `.zip`, `x64` or `arm64`. SmartScreen will warn about an unknown publisher.
+- Linux: `.AppImage` (`chmod +x`, then run) or `.deb`, `x64` or `arm64`.
 
-Transparent space passes clicks through to the desktop and other apps. The first preview uses the primary display work area. Chibis walk horizontally at their chosen height. Placements reset when the app closes. Artwork loads from pinned public Arkpedia SD assets, so the first load requires internet.
+Search for an operator or outfit and press +. Up to **32** chibis walk independently. Drag a chibi to place it; tap it for its native reaction. Hover or focus it for size, pause and remove controls. Arrow keys move a focused chibi; Escape removes it. **−** minimizes the companion to the taskbar or Dock; **Hide picker** keeps the chibis walking behind a small **Chibis +** launcher. Placements reset when the app quits. Artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
+
+## Overlay modes
+
+Both are remembered between launches (`settings.json` in the app's user-data folder) and can be changed from the picker's **Overlay** box, the tray / menu-bar menu, and the app menu. The tray menu also has **Quit companions**.
+
+- **Always on top** (default on): the transparent, frameless overlay covering the primary display's work area stays above every window and on every workspace / Space, including over full-screen apps where the OS allows it. Off: it is an ordinary window that other windows can cover; bring it back from the taskbar/Dock or the tray.
+- **Click-through** (default on): clicks on empty space go to the apps below. When the cursor is over a chibi, the picker or the launcher, the overlay takes the mouse back so you can drag or tap it. Off: the overlay captures every click on the screen (useful for playing with chibis without hitting the apps below).
+
+| | macOS | Windows | Linux X11 | Linux Wayland |
+|---|---|---|---|---|
+| Always on top | `screen-saver` level, all Spaces, over full-screen apps | topmost (`screen-saver`), over the taskbar | `_NET_WM_STATE_ABOVE`, honoured by most window managers | Wayland has no always-on-top for apps. The app runs under XWayland (`--ozone-platform=x11`), where GNOME and KDE usually honour it; some compositors may not |
+| Click-through | forwarded mouse moves plus a cursor poll | forwarded mouse moves plus a cursor poll | cursor poll (no forwarding on Linux) | Pass-through works, but the app cannot see the pointer over native Wayland windows, so chibis may not respond while it is on. Launching the app again shows the controls **and turns click-through off**, so you are never locked out |
+| Tray | menu bar | notification area | needs a StatusNotifier / AppIndicator host (GNOME: the AppIndicator extension) | same |
+
+On Linux a compositing window manager is needed for transparency. Without a tray host, use the picker's **Overlay** box, or relaunch the app to show the controls.
+
+## How chibis are drawn
+
+Every chibi is drawn by **one WebGL context on one full-window canvas**. Browsers and Electron keep only about 16 live WebGL contexts and drop the oldest, which is why one canvas per chibi breaks above 15. `tests/spine-guards.test.mjs` fails if a second context or scene renderer appears. Copies of the same chibi share their skeleton data and textures.
+
+A chibi's size is set once, from its visible idle pose, and does not change when it plays a reaction with larger bounds. Art may extend past the hit box instead of being shrunk to fit.
+
+Texture pages are uploaded premultiplied (`src/lib/spine/premultipliedTexture.ts`, `UNPACK_PREMULTIPLY_ALPHA_WEBGL`) and every skeleton is drawn with `premultipliedAlpha = true`, because spine-ts 3.8 blends Screen and Multiply slots as premultiplied either way. The guard test also holds every renderer to this.
 
 ## Develop
 
-Node 24+, `npm ci`, `npm run build`, `npm start`.
+Node 24+.
 
-Run `node --test tests/window-controls.test.cjs` for focused window lifecycle and IPC checks. Launch with `--window-diagnostics` to print native minimize/restore events without exposing renderer data.
+```sh
+npm ci
+npm test        # window/IPC/settings logic, framing math, renderer guards; no GUI
+npm run build   # TypeScript check + Vite build into dist/
+npm start       # runs the app (downloads the Electron binary on first run)
+```
 
-`npm run package:mac` builds Apple Silicon macOS; `npm run package:win` builds Windows x64. To build all four release ZIPs use `npm run build && npx electron-builder --mac zip --win zip --arm64 --x64 --publish never`.
+Launch with `--window-diagnostics` to print native minimize/restore events. Packages go to `releases/`:
 
-The catalogue is a snapshot of **arkpedia-data dev**, revision `268c22db9787b90ca8c70e7e5cf2b1ea5a053fe1`, at `source/data/chibi-art.json`. Metadata is in `src/catalogue-source.json`. There is no production website integration. ZIPs are standalone development-preview releases. Changing this app cannot change the website.
+```sh
+npm run package:mac     # dmg + zip, arm64 + x64 (on macOS)
+npm run package:win     # nsis + zip, x64 + arm64 (on Windows)
+npm run package:linux   # AppImage + deb, x64 + arm64 (on Linux)
+```
 
-Renderer code runs sandboxed with context isolation and no Node integration. IPC accepts only bounded hit regions, drag state, minimize, and quit requests from the local main frame. Remote navigation, new windows, and permission requests are denied. Only pinned HTTPS artwork is fetched; the application JavaScript is bundled locally.
+`.github/workflows/ci.yml` runs tests and the build on macOS, Windows and Ubuntu for every pull request. `.github/workflows/release.yml` packages all three on a `v*` tag and attaches them, with `SHA256SUMS.txt`, to a GitHub Release (pre-release, unsigned).
+
+Renderer code runs sandboxed with context isolation and no Node integration. IPC accepts only bounded hit regions, drag/hover state, the two boolean settings, minimize and quit requests from the local main frame. Remote navigation, new windows and permission requests are denied. Only pinned HTTPS artwork is fetched; the application JavaScript is bundled locally.
+
+## Artwork and catalogue
+
+`src/catalogue.json` is a snapshot of the website's chibi catalogue (`arkpedia/arkpedia-data`, dev, `source/data/chibi-art.json` at the revision in `src/catalogue-source.json`). Every model it lists is served from [arkpedia/arkpedia-sd-assets](https://github.com/arkpedia/arkpedia-sd-assets) at one immutable commit; the app bundles no artwork. See that repository's `README.md`, `LICENSE` and `NOTICE.md` for provenance and terms. Changing this app cannot change the website.
 
 ## Credits
 
-Arknights characters and artwork belong to their respective owners. Rendering uses the Arkpedia Spine 3.8 adapter and the unmodified Spine runtime. Preserve `public/SPINE-LICENSE.txt` and the notices in `src/lib/vendor/spine-3.8` when redistributing. The runtime license remains applicable.
+Arknights characters and artwork belong to their respective owners. Rendering uses the unmodified Spine Runtimes 3.8 (spine-ts WebGL); preserve `public/SPINE-LICENSE.txt` and the notices in `src/lib/vendor/spine-3.8` when redistributing. The Spine Runtimes License remains applicable.
+
+The app code carries no open-source licence yet (`UNLICENSED` in package.json); the owner decides before the repository is made public.
