@@ -2,13 +2,22 @@
 
 Arknights chibis walking on your desktop, for macOS, Windows and Linux. A separate app: no account import, website storage, login, auto-start or automatic updater.
 
-## Try it
+## Download
 
-Download a package from this repository's **Releases** (built by CI on every `v*` tag), or build one locally (below). Builds are unsigned development previews.
+**[Download the latest release →](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest)** Pick your platform and click the file. No account needed.
 
-- macOS: `.dmg` or `.zip`, Apple Silicon (`arm64`) or Intel (`x64`). Unsigned, so the first open needs right-click → Open.
-- Windows: `.exe` installer (NSIS) or portable `.zip`, `x64` or `arm64`. SmartScreen will warn about an unknown publisher.
-- Linux: `.AppImage` (`chmod +x`, then run) or `.deb`, `x64` or `arm64`.
+| Your computer | Download this |
+|---|---|
+| macOS, Apple Silicon (M1–M4) | `Arkpedia-Chibis-Dev-0.2.0-mac-arm64.dmg` |
+| macOS, Intel | `Arkpedia-Chibis-Dev-0.2.0-mac-x64.dmg` |
+| Windows, most PCs | `Arkpedia-Chibis-Dev-0.2.0-win-x64.exe` |
+| Windows on ARM | `Arkpedia-Chibis-Dev-0.2.0-win-arm64.exe` |
+| Linux, x86-64 | `Arkpedia-Chibis-Dev-0.2.0-linux-x86_64.AppImage` |
+| Linux, ARM64 | `Arkpedia-Chibis-Dev-0.2.0-linux-arm64.AppImage` |
+
+Each platform also has a portable `.zip` (macOS, Windows) and a `.deb` (Linux) on the same release page, plus `SHA256SUMS.txt` to check what you downloaded. The builds are unsigned development previews: on macOS the first open needs right-click → **Open**, and Windows shows a SmartScreen "unknown publisher" warning → **More info** → **Run anyway**.
+
+## Using it
 
 Search for an operator or outfit and press +. Up to **32** chibis walk independently. Drag a chibi to place it; tap it for its native reaction. Hover or focus it for size, pause and remove controls. Arrow keys move a focused chibi; Escape removes it. **−** minimizes the companion to the taskbar or Dock; **Hide picker** keeps the chibis walking behind a small **Chibis +** launcher. Placements reset when the app quits. Artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
 
@@ -54,7 +63,7 @@ npm run package:win     # nsis + zip, x64 + arm64 (on Windows)
 npm run package:linux   # AppImage + deb, x64 + arm64 (on Linux)
 ```
 
-`.github/workflows/ci.yml` runs tests and the build on macOS, Windows and Ubuntu for every pull request. `.github/workflows/release.yml` packages all three on a `v*` tag and attaches them, with `SHA256SUMS.txt`, to a GitHub Release (pre-release, unsigned).
+`.github/workflows/ci.yml` runs tests and the build on macOS, Windows and Ubuntu for every pull request. `.github/workflows/release.yml` packages all three on a `v*` tag and attaches them, with `SHA256SUMS.txt`, to a GitHub Release.
 
 Renderer code runs sandboxed with context isolation and no Node integration. IPC accepts only bounded hit regions, drag/hover state, the two boolean settings, minimize and quit requests from the local main frame. Remote navigation, new windows and permission requests are denied. Only pinned HTTPS artwork is fetched; the application JavaScript is bundled locally.
 
@@ -68,4 +77,4 @@ Arknights is developed by Hypergryph ([鹰角网络](https://www.hypergryph.com/
 
 Rendering uses the unmodified Spine Runtimes 3.8 (spine-ts WebGL); preserve `public/SPINE-LICENSE.txt` and the notices in `src/lib/vendor/spine-3.8` when redistributing. The Spine Runtimes License remains applicable.
 
-The app code carries no open-source licence yet (`UNLICENSED` in package.json); the owner decides before the repository is made public.
+The app code is all rights reserved for now (`UNLICENSED` in package.json): this repository being public lets people read and download it, but grants no licence to reuse it. A licence will be chosen separately.
