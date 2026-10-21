@@ -129,7 +129,9 @@ else {
     }
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', e => e.preventDefault());
-    win.webContents.on('did-finish-load', () => { publishSettings(); publishDisplays(); });
+    // Windows can clamp a frameless window created larger than one monitor; re-applying the
+    // bounds once the page is up makes the overlay cover every display on those systems.
+    win.webContents.on('did-finish-load', () => { publishSettings(); publishDisplays(); if (alive()) win.setBounds(unionBounds()); });
     ipcMain.on('regions', (e, value) => {
       if (!trusted(e) || !Array.isArray(value) || value.length > MAX_REGIONS) return;
       regions = value.filter(r => r && ['x','y','width','height'].every(k => Number.isFinite(r[k])) && r.width > 0 && r.height > 0);
