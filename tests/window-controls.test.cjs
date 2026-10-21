@@ -14,10 +14,10 @@ const last = (calls, kind) => calls.filter(call => Array.isArray(call) && call[0
 const stored = userData => JSON.parse(fs.readFileSync(path.join(userData, 'settings.json'), 'utf8'));
 
 // Exercise the real main-process wiring: two windows, no desktop session.
-async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 400, y: 400 } } = {}) {
+async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 400, y: 400 }, userData: reuse } = {}) {
   let tray, poll;
   const windows = [];
-  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'chibis-test-'));
+  const userData = reuse ?? fs.mkdtempSync(path.join(os.tmpdir(), 'chibis-test-'));
   if (settings) fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify(settings));
   const switches = [];
   const app = Object.assign(new EventEmitter(), {
@@ -187,6 +187,24 @@ test('Linux Wayland runs under XWayland and keeps click-through', async () => {
   const { switches, overlay } = await launch({ platform: 'linux', env: { XDG_SESSION_TYPE: 'wayland', WAYLAND_DISPLAY: 'wayland-0' } });
   assert.deepEqual(switches, [['ozone-platform', 'x11']]);
   assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', true, { forward: true }]);
+});
+
+test('active chibis are saved and restored, unless remembering is off', async () => {
+  const first = await launch();
+  first.ipcMain.emit('get-chibis', first.trusted);
+  assert.deepEqual(first.overlay.sent.filter(([channel]) => channel === 'chibis').at(-1), ['chibis', []]);
+  first.ipcMain.emit('chibis-changed', first.trusted, ['char_1#1', 'char_2#1']);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(first.userData, 'chibis.json'), 'utf8')), ['char_1#1', 'char_2#1']);
+
+  const second = await launch({ userData: first.userData });
+  second.ipcMain.emit('get-chibis', second.trusted);
+  assert.deepEqual(second.overlay.sent.filter(([channel]) => channel === 'chibis').at(-1), ['chibis', ['char_1#1', 'char_2#1']]);
+
+  second.ipcMain.emit('set-setting', second.panelTrusted, 'rememberChibis', false);
+  second.ipcMain.emit('chibis-changed', second.trusted, ['char_3#1']);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(second.userData, 'chibis.json'), 'utf8')), ['char_1#1', 'char_2#1'], 'not overwritten');
+  second.ipcMain.emit('get-chibis', second.trusted);
+  assert.deepEqual(second.overlay.sent.filter(([channel]) => channel === 'chibis').at(-1), ['chibis', []]);
 });
 
 test('the overlay reports every display in its own coordinates', async () => {

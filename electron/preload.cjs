@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('companion', {
     walkHorizontal: value?.walkHorizontal !== false,
     walkVertical: value?.walkVertical === true,
     lockToScreen: value?.lockToScreen !== false,
+    rememberChibis: value?.rememberChibis !== false,
   })),
   onDisplays: subscribe('displays', value => Array.isArray(value) ? value : []),
   requestDisplays: () => ipcRenderer.send('get-displays'),
@@ -28,5 +29,8 @@ contextBridge.exposeInMainWorld('companion', {
   clearChibis: () => ipcRenderer.send('clear-chibis'),
   reportCount: count => ipcRenderer.send('count', count),
   onCount: subscribe('count', value => Number(value) || 0),
+  saveChibis: ids => ipcRenderer.send('chibis-changed', ids),
+  getChibis: () => ipcRenderer.send('get-chibis'),
+  onChibis: subscribe('chibis', value => Array.isArray(value) ? value.filter(id => typeof id === 'string') : []),
   setSetting: (key, value) => ipcRenderer.send('set-setting', key, value),
 });

@@ -44,6 +44,15 @@ test('clip choice: walk while moving, a reaction once, else looping idle', () =>
   assert.deepEqual(chibiClip(names, 'Relax', undefined, true, ''), { clip: 'Relax', loop: true });
 });
 
+test('resting poses sit between reactions and idle, and never outrank walking', () => {
+  const names = ['Relax', 'Move', 'Sit', 'Sleep', 'Special', 'Interact'];
+  assert.deepEqual(chibiClip(names, 'Relax', 'Move', false, '', 'Sit'), { clip: 'Sit', loop: true });
+  assert.deepEqual(chibiClip(names, 'Relax', 'Move', false, '', 'Special', false), { clip: 'Special', loop: false });
+  assert.deepEqual(chibiClip(names, 'Relax', 'Move', true, '', 'Sit'), { clip: 'Move', loop: true });
+  assert.deepEqual(chibiClip(names, 'Relax', 'Move', false, 'Interact', 'Sit'), { clip: 'Interact', loop: false });
+  assert.deepEqual(chibiClip(names, 'Relax', 'Move', false, '', 'Missing'), { clip: 'Relax', loop: true });
+});
+
 test('unmeasurable poses fall back to a sane box', () => {
   assert.equal(finiteBounds({ x: Infinity, y: 0, width: 1, height: 1 }).height, 300);
   assert.ok(Number.isFinite(chibiScale({ x: 0, y: 0, width: NaN, height: NaN }, 150, 168)));

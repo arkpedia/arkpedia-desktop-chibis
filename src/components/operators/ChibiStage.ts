@@ -9,7 +9,7 @@ import { premultipliedTexture } from '@/lib/spine/premultipliedTexture';
 type Runtime = typeof Spine;
 type Context = InstanceType<Runtime['webgl']['ManagedWebGLRenderingContext']>;
 
-export interface ChibiControl { moving: boolean; flipped: boolean; reaction: string; sequence: number }
+export interface ChibiControl { moving: boolean; flipped: boolean; reaction: string; sequence: number; pose?: string; poseLoop?: boolean }
 export interface ChibiActorHooks {
   /** The chibi's hit box; the artwork is centred on it. */
   node: () => HTMLElement | null;
@@ -161,7 +161,7 @@ export class ChibiStage {
       const node = actor.hooks.node(), skeleton = actor.skeleton!, state = actor.state!, shared = actor.shared!;
       if (!node) continue;
       const control = actor.hooks.control();
-      const { clip, loop } = chibiClip(shared.data.animations.map(value => value.name), shared.idle, shared.walk, control.moving, control.reaction);
+      const { clip, loop } = chibiClip(shared.data.animations.map(value => value.name), shared.idle, shared.walk, control.moving, control.reaction, control.pose, control.poseLoop);
       if (clip !== actor.clip || loop !== actor.loop || (!loop && control.sequence !== actor.sequence)) {
         actor.clip = clip; actor.loop = loop; actor.sequence = control.sequence;
         state.setAnimation(0, clip, loop);

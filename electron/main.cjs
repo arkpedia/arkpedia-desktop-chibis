@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, screen, protocol, net, session } = require('electron');
+const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 // Absolute paths: the tests run this file in a vm whose require resolves from tests/.
@@ -15,6 +16,20 @@ let win, panel, tray, settings, regions = [], dragging = false, hovering = false
 app.setName('Arkpedia Chibis Dev');
 // A data directory override keeps a test or portable copy from fighting the installed one.
 app.setPath('userData', process.env.ARKPEDIA_CHIBIS_DATA || path.join(app.getPath('appData'), 'Arkpedia Chibis Dev'));
+// The picker restores whatever was on the desktop last time, when "Remember my chibis" is on.
+const CHIBIS_FILE = path.join(app.getPath('userData'), 'chibis.json');
+const readChibis = () => {
+  try {
+    const value = JSON.parse(fs.readFileSync(CHIBIS_FILE, 'utf8'));
+    return Array.isArray(value) ? value.filter(id => typeof id === 'string' && id.length <= 200).slice(0, maxChibis) : [];
+  } catch { return []; }
+};
+const writeChibis = ids => {
+  try {
+    fs.mkdirSync(path.dirname(CHIBIS_FILE), { recursive: true });
+    fs.writeFileSync(CHIBIS_FILE, JSON.stringify(ids.slice(0, maxChibis)));
+  } catch { /* the session still works without restoring next time */ }
+};
 const frameOf = w => w && !w.isDestroyed() && w.webContents && w.webContents.mainFrame;
 const fromWindow = (e, w) => !!w && !w.isDestroyed() && e.sender === w.webContents && e.senderFrame === w.webContents.mainFrame && e.senderFrame.url.startsWith('arkchibi://app/');
 const trusted = e => fromWindow(e, win) || fromWindow(e, panel);
@@ -91,6 +106,8 @@ const settingItems = () => {
     { label: 'Walk side to side', type: 'checkbox', checked: current.walkHorizontal, click: () => change('walkHorizontal', !settings.get().walkHorizontal) },
     { label: 'Walk up and down', type: 'checkbox', checked: current.walkVertical, click: () => change('walkVertical', !settings.get().walkVertical) },
     { label: 'Keep chibis on their screen', type: 'checkbox', checked: current.lockToScreen, click: () => change('lockToScreen', !settings.get().lockToScreen) },
+    { type: 'separator' },
+    { label: 'Remember my chibis', type: 'checkbox', checked: current.rememberChibis, click: () => change('rememberChibis', !settings.get().rememberChibis) },
   ];
 };
 // Menus are rebuilt after every change so their checkmarks match the stored settings.
@@ -164,6 +181,12 @@ else {
     ipcMain.on('hover', (e, value) => { if (fromWindow(e, win) && typeof value === 'boolean') { hovering = value; updateMouse(() => value); } });
     ipcMain.on('get-settings', e => { if (trusted(e)) publishSettings(); });
     ipcMain.on('get-displays', e => { if (fromWindow(e, win)) publishDisplays(); });
+    ipcMain.on('get-chibis', e => { if (fromWindow(e, win)) win.webContents.send('chibis', settings.get().rememberChibis ? readChibis() : []); });
+    ipcMain.on('chibis-changed', (e, ids) => {
+      if (!fromWindow(e, win) || !Array.isArray(ids)) return;
+      const clean = ids.filter(id => typeof id === 'string' && id.length <= 200).slice(0, maxChibis);
+      if (settings.get().rememberChibis) writeChibis(clean);
+    });
     ipcMain.on('set-setting', (e, key, value) => { if (trusted(e) && KEYS.includes(key) && typeof value === 'boolean') change(key, value); });
     ipcMain.on('add-chibi', (e, value) => {
       const entry = fromWindow(e, panel) ? cleanEntry(value) : null;

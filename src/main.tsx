@@ -4,11 +4,11 @@ import { ChibiStage } from './components/operators/ChibiStage';
 import catalogue from './catalogue.json';
 import limits from '../electron/limits.json';
 import type { ChibiModel } from './lib/operators/chibi';
-import { chooseChibiTap } from './lib/operators/chibiRoutine';
+import { chibiActivities, chooseChibiTap } from './lib/operators/chibiRoutine';
 import './style.css';
 
 type Region = { x:number; y:number; width:number; height:number };
-type Settings = { alwaysOnTop:boolean; followSpaces:boolean; clickChibis:boolean; walkHorizontal:boolean; walkVertical:boolean; lockToScreen:boolean };
+type Settings = { alwaysOnTop:boolean; followSpaces:boolean; clickChibis:boolean; walkHorizontal:boolean; walkVertical:boolean; lockToScreen:boolean; rememberChibis:boolean };
 type Area = Region & { primary?: boolean };
 type Entry = { id:string; name:string; model:ChibiModel };
 type Pet = { id:number; entry:Entry };
@@ -18,6 +18,7 @@ declare global { interface Window { companion?: {
   onDisplays: (callback:(value:Area[])=>void) => ()=>void; requestDisplays: () => void;
   addChibi: (entry:Entry) => void; onAdded: (callback:(entry:Entry)=>void) => ()=>void; onClear: (callback:()=>void) => ()=>void;
   clearChibis: () => void; reportCount: (count:number) => void; onCount: (callback:(count:number)=>void) => ()=>void;
+  saveChibis: (ids:string[]) => void; getChibis: () => void; onChibis: (callback:(ids:string[])=>void) => ()=>void;
 } } }
 /** One shared WebGL stage draws every chibi, so this is a comfort limit, not a context limit. */
 export const MAX_CHIBIS = limits.maxChibis;
@@ -36,14 +37,26 @@ const pickTarget=(areas:Area[],locked:Area|null,lock:boolean,width:number,height
   return {x:area.x+Math.random()*Math.max(0,area.width-width),y:area.y+Math.random()*Math.max(0,area.height-height)};
 };
 
+/** What a chibi does while it stands still: sit or sleep most of the time, a special once in a
+ * while, otherwise plain idle. */
+const chooseRest=(animations:{name:string;duration:number}[])=>{
+  const acts=chibiActivities(animations);
+  const pick=<T,>(list:T[])=>list[Math.floor(Math.random()*list.length)];
+  const roll=Math.random();
+  if (roll<.35&&acts.sit.length){const p=pick(acts.sit);return {clip:p.name,loop:true,duration:6000+Math.random()*9000};}
+  if (roll<.55&&acts.sleep.length){const p=pick(acts.sleep);return {clip:p.name,loop:true,duration:12000+Math.random()*12000};}
+  if (roll<.72&&acts.special.length){const p=pick(acts.special);return {clip:p.name,loop:false,duration:Math.max(900,p.duration*1000)};}
+  return {clip:'',loop:true,duration:2200+Math.random()*2600};
+};
+
 function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;settings:Settings|null;displays:Area[]}) {
   const stage = useContext(StageContext);
   const [size,setSize]=useState(150), [paused,setPaused]=useState(false), [status,setStatus]=useState<'loading'|'ready'|'error'>('loading');
   const [reaction,setReaction]=useState(''), [sequence,setSequence]=useState(0);
-  const node=useRef<HTMLDivElement>(null), state=useRef({x:Math.random()*Math.max(1,innerWidth-220),y:Math.max(0,innerHeight-210),targetX:Math.random()*Math.max(1,innerWidth-220),targetY:Math.max(0,innerHeight-210),wait:0});
+  const node=useRef<HTMLDivElement>(null), state=useRef({x:Math.random()*Math.max(1,innerWidth-220),y:Math.max(0,innerHeight-210),targetX:Math.random()*Math.max(1,innerWidth-220),targetY:Math.max(0,innerHeight-210),wait:0,resting:false});
   const drag=useRef<{x:number;y:number;startX:number;startY:number;moved:boolean}|null>(null), config=useRef({size,paused,reaction,walkHorizontal:true,walkVertical:false,lockToScreen:true,displays:[] as Area[]}); config.current={size,paused,reaction,walkHorizontal:settings?.walkHorizontal??true,walkVertical:settings?.walkVertical??false,lockToScreen:settings?.lockToScreen!==false,displays};
   // Read by the stage every frame; mutated here without re-rendering.
-  const control=useRef({moving:true,flipped:false,reaction:'',sequence:0}); control.current.reaction=reaction; control.current.sequence=sequence;
+  const control=useRef({moving:true,flipped:false,reaction:'',sequence:0,pose:'',poseLoop:true}); control.current.reaction=reaction; control.current.sequence=sequence;
   const animations=useRef<{name:string;duration:number}[]>([]), firstTap=useRef(true), spawned=useRef(false);
   useEffect(()=>{
     if(spawned.current||!displays.length)return;
@@ -76,11 +89,17 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
       s.targetY=c.walkVertical?Math.max(minY,Math.min(maxY,s.targetY)):s.y;
       if (!drag.current && !c.paused && !c.reaction && now>s.wait) {
         const dx=s.targetX-s.x, dy=s.targetY-s.y, distance=Math.hypot(dx,dy);
-        if (distance<3) {
+        if (s.resting) {
+          // The rest is over: stand up, then pick somewhere new to walk to.
+          s.resting=false; m.pose='';
           const next=pickTarget(areas,home,c.lockToScreen,width,height);
           s.targetX=c.walkHorizontal?next.x:s.x;
           s.targetY=c.walkVertical?next.y:s.y;
-          s.wait=now+1500+Math.random()*2000;m.moving=false;
+          m.moving=false;
+        } else if (distance<3) {
+          const rest=chooseRest(animations.current);
+          s.resting=true; m.pose=rest.clip; m.poseLoop=rest.loop;
+          s.wait=now+rest.duration; m.moving=false;
         } else {
           // One speed along the path, so a diagonal walk is not faster than a straight one.
           const step=Math.min(distance,dt*38);
@@ -124,18 +143,35 @@ function Modes({settings}:{settings:Settings|null}){
     <label><input type="checkbox" checked={settings.walkVertical} onChange={()=>toggle('walkVertical')}/><span>Up and down<small>Both on: they wander diagonally</small></span></label>
     <label><input type="checkbox" checked={settings.lockToScreen} onChange={()=>toggle('lockToScreen')}/><span>Stay on one screen<small>Off: may wander to another display. Dragging always works</small></span></label>
   </fieldset>
+  <fieldset className="modes"><legend>Desktop</legend>
+    <label><input type="checkbox" checked={settings.rememberChibis} onChange={()=>toggle('rememberChibis')}/><span>Remember my chibis<small>They come back the next time you open the app</small></span></label>
+  </fieldset>
   </>;
 }
 
 /** The transparent, click-through window the chibis live in. No picker, no launcher. */
 function Overlay(){
   const [pets,setPets]=useState<Pet[]>([]),[settings,setSettings]=useState<Settings|null>(null),[displays,setDisplays]=useState<Area[]>([]),[stage,setStage]=useState<ChibiStage|null>(null);
-  const next=useRef(0),canvas=useRef<HTMLCanvasElement>(null);
+  const next=useRef(0),canvas=useRef<HTMLCanvasElement>(null),hydrated=useRef(false);
   useEffect(()=>{const created=new ChibiStage(canvas.current!);setStage(created);return()=>created.dispose();},[]);
   useEffect(()=>{const off=window.companion?.onSettings(setSettings);window.companion?.requestSettings();return off;},[]);
   useEffect(()=>{const off=window.companion?.onDisplays(setDisplays);window.companion?.requestDisplays();return off;},[]);
   useEffect(()=>{const off=window.companion?.onAdded(entry=>setPets(rows=>rows.length>=MAX_CHIBIS?rows:[...rows,{id:++next.current,entry}]));return off;},[]);
   useEffect(()=>{const off=window.companion?.onClear(()=>setPets([]));return off;},[]);
+  useEffect(()=>{
+    const off=window.companion?.onChibis(ids=>{
+      hydrated.current=true;
+      const restored=ids.map(id=>[...catalogue as unknown as Entry[]].find(row=>row.id===id)).filter((row):row is Entry=>!!row);
+      setPets(rows=>{
+        const seen=new Set(rows.map(row=>row.entry.id));
+        const extra=restored.filter(row=>!seen.has(row.id)).slice(0,Math.max(0,MAX_CHIBIS-rows.length));
+        return [...rows,...extra.map(entry=>({id:++next.current,entry}))];
+      });
+    });
+    window.companion?.getChibis();
+    return off;
+  },[]);
+  useEffect(()=>{if(hydrated.current)window.companion?.saveChibis(pets.map(pet=>pet.entry.id));},[pets]);
   useEffect(()=>{window.companion?.reportCount(pets.length);},[pets.length]);
   useEffect(()=>{
     // Only .interactive boxes: a chibi's controls sit inside its own box and stop being
@@ -153,19 +189,28 @@ function Overlay(){
 
 /** The picker: a normal window that can be minimized without touching the chibis. */
 function Panel(){
-  const [query,setQuery]=useState(''),[settings,setSettings]=useState<Settings|null>(null),[count,setCount]=useState(0);
+  const [query,setQuery]=useState(''),[settings,setSettings]=useState<Settings|null>(null),[count,setCount]=useState(0),[view,setView]=useState<'list'|'settings'>('list');
   useEffect(()=>{const off=window.companion?.onSettings(setSettings);window.companion?.requestSettings();return off;},[]);
   useEffect(()=>{const off=window.companion?.onCount(setCount);return off;},[]);
   const entries=catalogue as unknown as Entry[];
   const matches=entries.filter(row=>row.name.toLowerCase().includes(query.toLowerCase())).slice(0,60);
   const full=count>=MAX_CHIBIS;
+  const settingsView=view==='settings';
   return <main className="panel">
-    <header><div><small>ARKPEDIA · DEV PREVIEW</small><h1>Desktop chibis</h1></div><button className="minimize" aria-label="Minimize the picker" title="Minimize the picker" onClick={()=>window.companion?.minimize()}>−</button></header>
-    <p>The chibis live in their own window and keep walking when this one is minimized. Drag them anywhere; tap for a reaction.</p>
-    <input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
-    <div className="choices" aria-label="Available chibis">{matches.map(entry=><button key={entry.id} disabled={full} onClick={()=>window.companion?.addChibi(entry)}><span>{entry.name}</span><b>+</b></button>)}</div>
-    <Modes settings={settings}/>
-    <footer><span>{count?`${count} of ${MAX_CHIBIS} on your desktop`:'No chibis yet'}{full?' · Limit reached':''}</span><div className="footer-actions"><button onClick={()=>window.companion?.clearChibis()}>Clear all</button><button onClick={()=>window.companion?.quit()}>Quit</button></div></footer>
+    <header>
+      <div><small>ARKPEDIA · DEV PREVIEW</small><h1>{settingsView?'Settings':'Desktop chibis'}</h1></div>
+      <button className="icon" aria-label={settingsView?'Back to the chibi list':'Settings'} title={settingsView?'Back to the chibi list':'Settings'} onClick={()=>setView(settingsView?'list':'settings')}>{settingsView?'←':'⚙'}</button>
+    </header>
+    {settingsView
+      ? <section className="settings">
+          <Modes settings={settings}/>
+          <button className="danger" onClick={()=>window.companion?.clearChibis()}>Remove every chibi from the desktop</button>
+        </section>
+      : <>
+          <input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
+          <div className="choices" aria-label="Available chibis">{matches.map(entry=><button key={entry.id} disabled={full} onClick={()=>window.companion?.addChibi(entry)}><span>{entry.name}</span><b>+</b></button>)}</div>
+        </>}
+    <footer><span>{count?`${count} of ${MAX_CHIBIS} on your desktop`:'No chibis yet'}{full?' · Limit reached':''}</span></footer>
   </main>;
 }
 

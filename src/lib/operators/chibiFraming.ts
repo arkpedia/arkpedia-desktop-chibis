@@ -33,9 +33,11 @@ export function chibiPlacement(idle: ChibiBounds, box: ChibiBox, viewportHeight:
   return { x: boxX - centreX * scale * facing, y: boxY - centreY * scale, scaleX: scale * facing, scaleY: scale };
 }
 
-/** Which clip a desktop chibi plays: walking while it moves, a requested reaction once, otherwise idle. */
-export function chibiClip(names: readonly string[], idle: string, walk: string | undefined, moving: boolean, reaction: string): { clip: string; loop: boolean } {
+/** Which clip a desktop chibi plays: walking while it moves, a requested reaction once, a resting
+ * pose (sit, sleep, special) while it rests, otherwise idle. */
+export function chibiClip(names: readonly string[], idle: string, walk: string | undefined, moving: boolean, reaction: string, pose = '', poseLoop = true): { clip: string; loop: boolean } {
   if (moving && walk) return { clip: walk, loop: true };
   if (reaction && names.includes(reaction)) return { clip: reaction, loop: false };
+  if (pose && names.includes(pose)) return { clip: pose, loop: poseLoop };
   return { clip: idle, loop: !/die|retreat|start|begin|end/i.test(idle) };
 }

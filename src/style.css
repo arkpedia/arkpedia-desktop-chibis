@@ -8,3 +8,11 @@
 /* The picker is its own normal window now; the chibis get the whole screen in theirs. */
 body.role-panel{background:#0e1a20;pointer-events:auto}
 body.role-panel .panel{position:static;width:100%;max-width:none;height:100vh;max-height:none;border:0;border-radius:0;box-shadow:none;background:#0e1a20}
+
+/* The picker gives the operator list the space the old buttons and settings used to take. */
+body.role-panel .choices{flex:1;max-height:none}
+.icon{padding:6px 10px;font-size:18px;line-height:1;border-color:transparent;background:transparent;color:#58dbca}
+.icon:hover{background:#1a2a32;border-color:transparent}
+.settings{display:flex;flex-direction:column;gap:14px;flex:1;min-height:0;overflow-y:auto}
+.danger{color:#ff9b9b;border-color:#5c3a3a;background:#2a1a1a}
+.danger:hover{background:#3a2222;border-color:#ff9b9b}

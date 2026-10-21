@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const DEFAULTS = Object.freeze({ alwaysOnTop: true, followSpaces: true, clickChibis: false, walkHorizontal: true, walkVertical: false, lockToScreen: true });
+const DEFAULTS = Object.freeze({ alwaysOnTop: true, followSpaces: true, clickChibis: false, walkHorizontal: true, walkVertical: false, lockToScreen: true, rememberChibis: true });
 const KEYS = Object.keys(DEFAULTS);
 
 function normalize(value) {

@@ -25,11 +25,13 @@ The builds are unsigned development previews. On **macOS** the app is ad-hoc sig
 
 The app runs as **two windows**: the chibis live in a transparent, click-through overlay, and the picker is an ordinary window with a title bar. Search for an operator or outfit in the picker and press +. Up to **32** chibis walk independently; drag one to place it, tap it for its native reaction, hover or focus it for size, pause and remove controls. Arrow keys move a focused chibi; Escape removes it. **Clear all** empties the desktop.
 
-Because the picker is just a window, minimizing it (or closing the picker window's own controls) leaves the chibis walking. Reopen it from the Dock/taskbar, the tray menu's **Show companion controls**, or by launching the app again. Closing the picker window quits the app. Placements reset when the app quits; artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
+Because the picker is just a window, minimizing it leaves the chibis walking; reopen it from the Dock/taskbar, the tray menu's **Show companion controls**, or by launching the app again. Closing the picker window quits the app, so there are no in-window quit or minimize buttons — the title bar already has them.
+
+Between walks a chibi sits, sleeps, idles or plays its special animation, chosen from whatever the model provides. **Settings → Remember my chibis** (on by default) saves the current set and restores it on the next launch; **Settings → Remove every chibi from the desktop** clears it. Artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
 
 ## Overlay modes
 
-Clicks on empty space always go to the apps below; the overlay only takes the mouse back over a chibi, the picker or the launcher. The remaining options are remembered between launches (`settings.json` in the app's user-data folder) and can be changed from the picker's **Overlay** box, the tray / menu-bar menu, and the app menu. The tray menu also has **Quit companions**.
+Clicks on empty space always go to the apps below; the overlay only takes the mouse back over a chibi, the picker or the launcher. The remaining options are remembered between launches (`settings.json` in the app's user-data folder) and can be changed from the picker's **Settings** (the gear button), the tray / menu-bar menu, and the app menu. The tray menu also has **Quit companions**.
 
 - **Always on top** (default on): the overlay stays above every window. Off: it is an ordinary window that other windows can cover; bring it back from the taskbar/Dock or the tray.
 - **Follow across desktops** (default on): the chibis appear on every Space / workspace, including over full-screen apps where the OS allows it. Off: they stay on the desktop they were opened on. Independent of always-on-top.
@@ -42,11 +44,11 @@ Clicks on empty space always go to the apps below; the overlay only takes the mo
 | Taking the mouse back over a chibi | forwarded mouse moves plus a cursor poll | forwarded mouse moves plus a cursor poll | cursor poll (no forwarding on Linux) | the app cannot see the pointer over native Wayland windows, so chibis may not respond; relaunching shows the controls |
 | Tray | menu bar | notification area | needs a StatusNotifier / AppIndicator host (GNOME: the AppIndicator extension) | same |
 
-On Linux a compositing window manager is needed for transparency. Without a tray host, use the picker's **Overlay** box, or relaunch the app to show the controls.
+On Linux a compositing window manager is needed for transparency. Without a tray host, use the picker's **Settings** (gear), or relaunch the app to show the picker.
 
 ## Walking and screens
 
-Chibis wander left and right by default. The picker's **Walking** box, the tray menu and the app menu add **up and down**; with both on a chibi picks a point anywhere and walks there in a straight line, so it moves diagonally without speeding up. Both off leaves them standing where they are. The axes are remembered between launches.
+Chibis wander left and right by default. **Settings** (gear) → **Walking**, the tray menu and the app menu add **up and down**; with both on a chibi picks a point anywhere and walks there in a straight line, so it moves diagonally without speeding up. Both off leaves them standing where they are. The axes are remembered between launches.
 
 The overlay covers every display's work area, so you can drag a chibi from one screen to another. **Stay on one screen** (default on) keeps each chibi walking within the screen it is currently on; turn it off and a chibi may wander onto another display. Dragging works either way, so the lock only constrains walking.
 
