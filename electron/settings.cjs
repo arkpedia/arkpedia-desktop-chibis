@@ -1,9 +1,9 @@
-// Remembered overlay modes. Only known boolean keys survive a read, so a damaged or
-// hand-edited file can never put the window in an unknown state.
+// Remembered overlay modes and walking axes. Only known boolean keys survive a read, so a
+// damaged or hand-edited file can never put the window in an unknown state.
 const fs = require('node:fs');
 const path = require('node:path');
 
-const DEFAULTS = Object.freeze({ alwaysOnTop: true, clickThrough: true });
+const DEFAULTS = Object.freeze({ alwaysOnTop: true, clickThrough: true, walkHorizontal: true, walkVertical: false, lockToScreen: true });
 const KEYS = Object.keys(DEFAULTS);
 
 function normalize(value) {

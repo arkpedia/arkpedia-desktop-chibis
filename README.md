@@ -21,7 +21,7 @@ The builds are unsigned development previews. On **macOS** the app is ad-hoc sig
 
 ## Using it
 
-Search for an operator or outfit and press +. Up to **32** chibis walk independently. Drag a chibi to place it; tap it for its native reaction. Hover or focus it for size, pause and remove controls. Arrow keys move a focused chibi; Escape removes it. **−** minimizes the companion to the taskbar or Dock; **Hide picker** keeps the chibis walking behind a small **Chibis +** launcher. Placements reset when the app quits. Artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
+Search for an operator or outfit and press +. Up to **32** chibis walk independently. Drag a chibi to place it; tap it for its native reaction. Hover or focus it for size, pause and remove controls. Arrow keys move a focused chibi; Escape removes it. **−** and **Hide picker** put the picker away behind a small **Chibis +** launcher while the chibis keep walking; **Chibis +** brings it back. Use the tray menu or the app menu to minimize the whole app to the taskbar or Dock. Placements reset when the app quits. Artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
 
 ## Overlay modes
 
@@ -37,6 +37,12 @@ Both are remembered between launches (`settings.json` in the app's user-data fol
 | Tray | menu bar | notification area | needs a StatusNotifier / AppIndicator host (GNOME: the AppIndicator extension) | same |
 
 On Linux a compositing window manager is needed for transparency. Without a tray host, use the picker's **Overlay** box, or relaunch the app to show the controls.
+
+## Walking and screens
+
+Chibis wander left and right by default. The picker's **Walking** box, the tray menu and the app menu add **up and down**; with both on a chibi picks a point anywhere and walks there in a straight line, so it moves diagonally without speeding up. Both off leaves them standing where they are. The axes are remembered between launches.
+
+The overlay covers every display's work area, so you can drag a chibi from one screen to another. **Stay on one screen** (default on) keeps each chibi walking within the screen it is currently on; turn it off and a chibi may wander onto another display. Dragging works either way, so the lock only constrains walking.
 
 ## How chibis are drawn
 

@@ -22,9 +22,10 @@ async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 4
   });
   class Window extends EventEmitter {
     constructor(options) {
-      super(); window = this; this.options = options; this.minimized = false; this.visible = true; this.calls = [];
+      super(); window = this; this.options = options; this.minimized = false; this.visible = true; this.calls = []; this.sent = [];
       this.webContents = Object.assign(new EventEmitter(), {
-        mainFrame: { url: 'arkchibi://app/' }, setWindowOpenHandler() {}, send: message => this.calls.push(message),
+        mainFrame: { url: 'arkchibi://app/' }, setWindowOpenHandler() {},
+        send: (channel, value) => { this.calls.push(channel); this.sent.push([channel, JSON.parse(JSON.stringify(value ?? null))]); },
       });
     }
     isDestroyed() { return false; }
@@ -47,7 +48,7 @@ async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 4
     Tray: class extends EventEmitter { constructor() { super(); tray = this; } setTitle() {} setToolTip() {} setContextMenu(menu) { this.menu = menu; } },
     nativeImage: { createFromDataURL: () => ({ resize: () => ({}) }) },
     Menu: { buildFromTemplate: x => x, setApplicationMenu: x => { applicationMenu = x; } },
-    screen: Object.assign(new EventEmitter(), { getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1280, height: 720 } }), getCursorScreenPoint: () => cursor }),
+    screen: Object.assign(new EventEmitter(), { getPrimaryDisplay: () => ({ id: 1, workArea: { x: 0, y: 0, width: 1280, height: 720 } }), getAllDisplays: () => [{ id: 1, workArea: { x: 0, y: 0, width: 1280, height: 720 } }], getCursorScreenPoint: () => cursor }),
     protocol: { registerSchemesAsPrivileged() {}, handle() {} }, net: {},
     session: { defaultSession: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } },
   };
@@ -121,7 +122,7 @@ test('always on top off makes a normal window and is remembered', async () => {
   assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', false]);
   assert.equal(item('Always on top').checked, false, 'menu rebuilt with the new state');
   assert.ok(window.calls.some(call => call === 'settings'), 'renderer told');
-  assert.deepEqual(stored(userData), { alwaysOnTop: false, clickThrough: true });
+  assert.deepEqual(stored(userData), { alwaysOnTop: false, clickThrough: true, walkHorizontal: true, walkVertical: false, lockToScreen: true });
   assert.ok(menu().some(entry => entry.label === 'Quit companions'));
   const again = await launch({ settings: stored(userData) });
   assert.equal(again.window.options.alwaysOnTop, false);
@@ -138,6 +139,24 @@ test('click-through: transparent space passes through, a chibi under the cursor 
   ipcMain.emit('hover', trusted, false); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
   ipcMain.emit('dragging', trusted, true); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false]);
   poll(); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false], 'held chibi keeps the mouse');
+});
+
+test('walking axes default to horizontal only and are remembered', async () => {
+  const { item, userData } = await launch();
+  assert.equal(item('Walk side to side').checked, true);
+  assert.equal(item('Walk up and down').checked, false);
+  item('Walk up and down').click();
+  assert.deepEqual(stored(userData), { alwaysOnTop: true, clickThrough: true, walkHorizontal: true, walkVertical: true, lockToScreen: true });
+  item('Walk side to side').click();
+  assert.deepEqual(stored(userData), { alwaysOnTop: true, clickThrough: true, walkHorizontal: false, walkVertical: true, lockToScreen: true });
+});
+
+test('the overlay covers every display and reports their layout in window coordinates', async () => {
+  const { window, ipcMain, trusted } = await launch();
+  assert.equal(window.options.width, 1280);
+  assert.equal(window.options.height, 720);
+  ipcMain.emit('get-displays', trusted);
+  assert.deepEqual(window.sent.at(-1), ['displays', [{ x: 0, y: 0, width: 1280, height: 720, primary: true }]]);
 });
 
 test('click-through off captures the mouse everywhere, at once and on every poll', async () => {

@@ -8,26 +8,46 @@ import { chooseChibiTap } from './lib/operators/chibiRoutine';
 import './style.css';
 
 type Region = { x:number; y:number; width:number; height:number };
-type Settings = { alwaysOnTop:boolean; clickThrough:boolean };
+type Settings = { alwaysOnTop:boolean; clickThrough:boolean; walkHorizontal:boolean; walkVertical:boolean; lockToScreen:boolean };
+type Area = Region & { primary?: boolean };
 declare global { interface Window { companion?: {
   regions: (r: Region[]) => void; dragging: (value:boolean) => void; hover: (value:boolean) => void; minimize: () => void; quit: () => void;
   onShow: (callback:()=>void) => ()=>void; onSettings: (callback:(value:Settings)=>void) => ()=>void; requestSettings: () => void; setSetting: (key:keyof Settings, value:boolean) => void;
+  onDisplays: (callback:(value:Area[])=>void) => ()=>void; requestDisplays: () => void;
 } } }
 type Entry = { id:string; name:string; model:ChibiModel };
 type Pet = { id:number; entry:Entry };
 /** One shared WebGL stage draws every chibi, so this is a comfort limit, not a context limit. */
 export const MAX_CHIBIS = limits.maxChibis;
 const StageContext = createContext<ChibiStage | null>(null);
+/** The display whose work area holds this point, or the nearest one if it falls in a gap. */
+const areaAt=(areas:Area[],x:number,y:number):Area=>{
+  const inside=areas.find(a=>x>=a.x&&x<=a.x+a.width&&y>=a.y&&y<=a.y+a.height);
+  if(inside)return inside;
+  return areas.reduce((best,a)=>{const dx=Math.max(a.x-x,0,x-(a.x+a.width)),dy=Math.max(a.y-y,0,y-(a.y+a.height)),d=dx*dx+dy*dy;return d<best.d?{a,d}:best;},{a:areas[0],d:Infinity}).a;
+};
+/** Where to wander next: inside the current screen when locked, anywhere on any screen otherwise. */
+const pickTarget=(areas:Area[],locked:Area|null,lock:boolean,width:number,height:number)=>{
+  const area=lock&&locked?locked:areas[Math.floor(Math.random()*areas.length)];
+  return {x:area.x+Math.random()*Math.max(0,area.width-width),y:area.y+Math.random()*Math.max(0,area.height-height)};
+};
 
-function Walker({ pet, remove }: {pet:Pet;remove:()=>void}) {
+function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;settings:Settings|null;displays:Area[]}) {
   const stage = useContext(StageContext);
   const [size,setSize]=useState(150), [paused,setPaused]=useState(false), [status,setStatus]=useState<'loading'|'ready'|'error'>('loading');
   const [reaction,setReaction]=useState(''), [sequence,setSequence]=useState(0);
-  const node=useRef<HTMLDivElement>(null), state=useRef({x:Math.random()*Math.max(1,innerWidth-220),y:Math.max(0,innerHeight-210),target:Math.random()*innerWidth,wait:0});
-  const drag=useRef<{x:number;y:number;startX:number;startY:number;moved:boolean}|null>(null), config=useRef({size,paused,reaction}); config.current={size,paused,reaction};
+  const node=useRef<HTMLDivElement>(null), state=useRef({x:Math.random()*Math.max(1,innerWidth-220),y:Math.max(0,innerHeight-210),targetX:Math.random()*Math.max(1,innerWidth-220),targetY:Math.max(0,innerHeight-210),wait:0});
+  const drag=useRef<{x:number;y:number;startX:number;startY:number;moved:boolean}|null>(null), config=useRef({size,paused,reaction,walkHorizontal:true,walkVertical:false,lockToScreen:true,displays:[] as Area[]}); config.current={size,paused,reaction,walkHorizontal:settings?.walkHorizontal??true,walkVertical:settings?.walkVertical??false,lockToScreen:settings?.lockToScreen!==false,displays};
   // Read by the stage every frame; mutated here without re-rendering.
   const control=useRef({moving:true,flipped:false,reaction:'',sequence:0}); control.current.reaction=reaction; control.current.sequence=sequence;
-  const animations=useRef<{name:string;duration:number}[]>([]), firstTap=useRef(true);
+  const animations=useRef<{name:string;duration:number}[]>([]), firstTap=useRef(true), spawned=useRef(false);
+  useEffect(()=>{
+    if(spawned.current||!displays.length)return;
+    spawned.current=true;
+    const s=state.current,area=displays.find(a=>a.primary)??displays[0];
+    s.x=area.x+Math.random()*Math.max(1,area.width-size); s.y=area.y+area.height-size*1.125;
+    s.targetX=s.x; s.targetY=s.y;
+  },[displays,size]);
   useEffect(()=> {
     if (!stage) return;
     return stage.add(pet.entry.model, {
@@ -41,17 +61,37 @@ function Walker({ pet, remove }: {pet:Pet;remove:()=>void}) {
     const step=(now:number)=> {
       const dt=Math.min(.06,(now-last)/1000);last=now;
       const c=config.current,s=state.current,m=control.current,width=c.size,height=c.size*1.125;
-      s.target=Math.max(0,Math.min(innerWidth-width,s.target));
+      const areas=c.displays.length?c.displays:[{x:0,y:0,width:innerWidth,height:innerHeight}];
+      // Locked: the current screen is the world. Dragging ignores the lock so a chibi can be
+      // carried to another screen; walking then stays on the screen it was dropped on.
+      const home=c.lockToScreen?areaAt(areas,s.x+width/2,s.y+height/2):null;
+      const minX=home?home.x:0, maxX=home?home.x+home.width-width:innerWidth-width;
+      const minY=home?home.y:0, maxY=home?home.y+home.height-height:innerHeight-height;
+      // A disabled axis holds its position, so the target collapses onto the chibi.
+      s.targetX=c.walkHorizontal?Math.max(minX,Math.min(maxX,s.targetX)):s.x;
+      s.targetY=c.walkVertical?Math.max(minY,Math.min(maxY,s.targetY)):s.y;
       if (!drag.current && !c.paused && !c.reaction && now>s.wait) {
-        const dx=s.target-s.x;
-        if (Math.abs(dx)<3) {s.target=Math.random()*Math.max(1,innerWidth-width);s.wait=now+1500+Math.random()*2000;m.moving=false;}
-        else {s.x+=Math.sign(dx)*Math.min(Math.abs(dx),dt*38);m.moving=true;m.flipped=dx<0;}
+        const dx=s.targetX-s.x, dy=s.targetY-s.y, distance=Math.hypot(dx,dy);
+        if (distance<3) {
+          const next=pickTarget(areas,home,c.lockToScreen,width,height);
+          s.targetX=c.walkHorizontal?next.x:s.x;
+          s.targetY=c.walkVertical?next.y:s.y;
+          s.wait=now+1500+Math.random()*2000;m.moving=false;
+        } else {
+          // One speed along the path, so a diagonal walk is not faster than a straight one.
+          const step=Math.min(distance,dt*38);
+          s.x+=dx/distance*step; s.y+=dy/distance*step;
+          m.moving=true; if (dx) m.flipped=dx<0;
+        }
       } else m.moving=false;
       s.x=Math.max(0,Math.min(innerWidth-width,s.x));s.y=Math.max(0,Math.min(innerHeight-height,s.y));
       if(node.current){node.current.style.left=`${s.x}px`;node.current.style.top=`${s.y}px`;}
       frame=requestAnimationFrame(step);
     };
-    frame=requestAnimationFrame(step);return()=>{cancelAnimationFrame(frame);if(drag.current)window.companion?.dragging(false);};
+    // A drag released outside the window never reaches the element's pointerup.
+    const endDrag=()=>{if(drag.current){drag.current=null;window.companion?.dragging(false);}};
+    window.addEventListener('pointerup',endDrag);window.addEventListener('pointercancel',endDrag);window.addEventListener('blur',endDrag);
+    frame=requestAnimationFrame(step);return()=>{cancelAnimationFrame(frame);endDrag();window.removeEventListener('pointerup',endDrag);window.removeEventListener('pointercancel',endDrag);window.removeEventListener('blur',endDrag);};
   },[]);
   function tap(){const next=chooseChibiTap(animations.current,firstTap.current);firstTap.current=false;if(next){setReaction(next.clip);setSequence(n=>n+1);}}
   return <div className="pet interactive" ref={node} style={{width:size,height:size*1.125}} role="group" aria-label={`${pet.entry.name} desktop chibi`} tabIndex={0} title="Tap to interact · Drag to move"
@@ -67,17 +107,26 @@ function Walker({ pet, remove }: {pet:Pet;remove:()=>void}) {
 function Modes({settings}:{settings:Settings|null}){
   if(!settings||!window.companion)return null;
   const toggle=(key:keyof Settings)=>window.companion?.setSetting(key,!settings[key]);
-  return <fieldset className="modes"><legend>Overlay</legend>
+  return <>
+  <fieldset className="modes"><legend>Overlay</legend>
     <label><input type="checkbox" checked={settings.alwaysOnTop} onChange={()=>toggle('alwaysOnTop')}/><span>Always on top<small>Chibis stay above every window</small></span></label>
     <label><input type="checkbox" checked={settings.clickThrough} onChange={()=>toggle('clickThrough')}/><span>Click-through<small>Clicks pass to apps below, except on a chibi</small></span></label>
-  </fieldset>;
+  </fieldset>
+  <fieldset className="modes"><legend>Walking</legend>
+    <label><input type="checkbox" checked={settings.walkHorizontal} onChange={()=>toggle('walkHorizontal')}/><span>Side to side<small>Wander left and right</small></span></label>
+    <label><input type="checkbox" checked={settings.walkVertical} onChange={()=>toggle('walkVertical')}/><span>Up and down<small>Both on: they wander diagonally</small></span></label>
+    <label><input type="checkbox" checked={settings.lockToScreen} onChange={()=>toggle('lockToScreen')}/><span>Stay on one screen<small>Off: may wander to another display. Dragging always works</small></span></label>
+  </fieldset>
+  </>;
 }
 function App(){
- const [open,setOpen]=useState(true),[query,setQuery]=useState(''),[pets,setPets]=useState<Pet[]>([]),[settings,setSettings]=useState<Settings|null>(null),[stage,setStage]=useState<ChibiStage|null>(null),next=useRef(0),canvas=useRef<HTMLCanvasElement>(null);
- const entries=catalogue as Entry[]; const matches=entries.filter(row=>row.name.toLowerCase().includes(query.toLowerCase())).slice(0,40);
+ const [open,setOpen]=useState(true),[query,setQuery]=useState(''),[pets,setPets]=useState<Pet[]>([]),[settings,setSettings]=useState<Settings|null>(null),[displays,setDisplays]=useState<Area[]>([]),[stage,setStage]=useState<ChibiStage|null>(null),next=useRef(0),canvas=useRef<HTMLCanvasElement>(null);
+ // The bundled JSON has one literal shape per entry; Entry is the contract the stage relies on.
+ const entries=catalogue as unknown as Entry[]; const matches=entries.filter(row=>row.name.toLowerCase().includes(query.toLowerCase())).slice(0,40);
  const full=pets.length>=MAX_CHIBIS;
  useEffect(()=>{const created=new ChibiStage(canvas.current!);setStage(created);return()=>created.dispose();},[]);
  useEffect(()=>window.companion?.onShow(()=>setOpen(true)),[]);
+ useEffect(()=>{const off=window.companion?.onDisplays(setDisplays);window.companion?.requestDisplays();return off;},[]);
  useEffect(()=>{const off=window.companion?.onSettings(setSettings);window.companion?.requestSettings();return off;},[]);
  useEffect(()=>{
   // Only .interactive boxes: a chibi's controls sit inside its own box.
@@ -89,11 +138,11 @@ function App(){
   return()=>{clearInterval(id);document.removeEventListener('mousemove',move);};
  },[]);
  return <><canvas className="stage" ref={canvas} aria-hidden="true"/>
- {open?<aside className="panel interactive"><header><div><small>ARKPEDIA · DEV PREVIEW</small><h1>Desktop chibis</h1></div><button className="minimize" aria-label="Minimize companions" title="Minimize companions" onClick={()=>window.companion?.minimize()}>−</button></header><p>Add a companion. Drag to move, tap to interact.</p><input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
+ {open?<aside className="panel interactive"><header><div><small>ARKPEDIA · DEV PREVIEW</small><h1>Desktop chibis</h1></div><button className="minimize" aria-label="Collapse the picker" title="Collapse the picker" onClick={()=>setOpen(false)}>−</button></header><p>Add a companion. Drag to move, tap to interact.</p><input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
  <div className="choices" aria-label="Available chibis">{matches.map(entry=><button key={entry.id} disabled={full} onClick={()=>setPets(p=>p.length>=MAX_CHIBIS?p:[...p,{id:++next.current,entry}])}><span>{entry.name}</span><b>+</b></button>)}</div>
  <Modes settings={settings}/>
- <footer><span>{pets.length?`${pets.length} of ${MAX_CHIBIS} on your desktop`:'Your desktop is ready'}{full?' · Limit reached':''}</span><div className="footer-actions"><button onClick={()=>setOpen(false)}>Hide picker</button><button onClick={()=>window.companion?.quit()}>Quit</button></div></footer></aside>:<div className="launcher interactive"><button onClick={()=>setOpen(true)}>Chibis +</button><button className="minimize" aria-label="Minimize companions" title="Minimize companions" onClick={()=>window.companion?.minimize()}>−</button></div>}
- <StageContext.Provider value={stage}>{pets.map(pet=><Walker key={pet.id} pet={pet} remove={()=>setPets(p=>p.filter(row=>row.id!==pet.id))}/>)}</StageContext.Provider>
+ <footer><span>{pets.length?`${pets.length} of ${MAX_CHIBIS} on your desktop`:'Your desktop is ready'}{full?' · Limit reached':''}</span><div className="footer-actions"><button onClick={()=>setOpen(false)}>Hide picker</button><button onClick={()=>window.companion?.quit()}>Quit</button></div></footer></aside>:<div className="launcher interactive"><button onClick={()=>setOpen(true)}>Chibis +</button></div>}
+ <StageContext.Provider value={stage}>{pets.map(pet=><Walker key={pet.id} pet={pet} settings={settings} displays={displays} remove={()=>setPets(p=>p.filter(row=>row.id!==pet.id))}/>)}</StageContext.Provider>
  </>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);

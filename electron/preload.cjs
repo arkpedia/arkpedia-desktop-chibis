@@ -11,8 +11,16 @@ contextBridge.exposeInMainWorld('companion', {
   minimize: () => ipcRenderer.send('minimize'),
   quit: () => ipcRenderer.send('quit'),
   onShow: subscribe('show-controls', () => undefined),
-  // Only the two boolean modes cross the bridge.
-  onSettings: subscribe('settings', value => ({ alwaysOnTop: value?.alwaysOnTop === true, clickThrough: value?.clickThrough === true })),
+  // Only the known boolean modes cross the bridge.
+  onSettings: subscribe('settings', value => ({
+    alwaysOnTop: value?.alwaysOnTop === true,
+    clickThrough: value?.clickThrough === true,
+    walkHorizontal: value?.walkHorizontal !== false,
+    walkVertical: value?.walkVertical === true,
+    lockToScreen: value?.lockToScreen !== false,
+  })),
+  onDisplays: subscribe('displays', value => Array.isArray(value) ? value : []),
+  requestDisplays: () => ipcRenderer.send('get-displays'),
   requestSettings: () => ipcRenderer.send('get-settings'),
   setSetting: (key, value) => ipcRenderer.send('set-setting', key, value),
 });

@@ -15,6 +15,27 @@ app.setName('Arkpedia Chibis Dev');
 app.setPath('userData', path.join(app.getPath('appData'), 'Arkpedia Chibis Dev'));
 const trusted = e => win && e.sender === win.webContents && e.senderFrame === win.webContents.mainFrame && e.senderFrame.url.startsWith('arkchibi://app/');
 const alive = () => win && !win.isDestroyed();
+// The overlay spans every display's work area, so a chibi can be dragged from one screen to
+// another. Rects travel to the renderer in window coordinates for hit tests and walking.
+const workAreas = () => screen.getAllDisplays().map(display => display.workArea);
+const unionBounds = () => {
+  const areas = workAreas();
+  const left = Math.min(...areas.map(area => area.x)), top = Math.min(...areas.map(area => area.y));
+  const right = Math.max(...areas.map(area => area.x + area.width)), bottom = Math.max(...areas.map(area => area.y + area.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+};
+const publishDisplays = () => {
+  if (!alive()) return;
+  const origin = win.getBounds();
+  const primary = screen.getPrimaryDisplay().id;
+  win.webContents.send('displays', screen.getAllDisplays().map(display => ({
+    x: display.workArea.x - origin.x,
+    y: display.workArea.y - origin.y,
+    width: display.workArea.width,
+    height: display.workArea.height,
+    primary: display.id === primary,
+  })));
+};
 const show = () => {
   if (!alive()) return;
   if (win.isMinimized()) win.restore();
@@ -59,6 +80,10 @@ const settingItems = () => {
   return [
     { label: 'Always on top', type: 'checkbox', checked: current.alwaysOnTop, click: () => change('alwaysOnTop', !settings.get().alwaysOnTop) },
     { label: 'Click-through', type: 'checkbox', checked: current.clickThrough, click: () => change('clickThrough', !settings.get().clickThrough) },
+    { type: 'separator' },
+    { label: 'Walk side to side', type: 'checkbox', checked: current.walkHorizontal, click: () => change('walkHorizontal', !settings.get().walkHorizontal) },
+    { label: 'Walk up and down', type: 'checkbox', checked: current.walkVertical, click: () => change('walkVertical', !settings.get().walkVertical) },
+    { label: 'Keep chibis on their screen', type: 'checkbox', checked: current.lockToScreen, click: () => change('lockToScreen', !settings.get().lockToScreen) },
   ];
 };
 // Menus are rebuilt after every change so their checkmarks match the stored settings.
@@ -92,7 +117,7 @@ else {
     session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     session.defaultSession.setPermissionCheckHandler(() => false);
     const { alwaysOnTop } = settings.get();
-    win = new BrowserWindow({ ...screen.getPrimaryDisplay().workArea, title: 'Arkpedia Chibis Dev', transparent: true, frame: false, resizable: false, minimizable: true, maximizable: false, fullscreenable: false, hasShadow: false, alwaysOnTop, skipTaskbar: false, backgroundColor: '#00000000', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
+    win = new BrowserWindow({ ...unionBounds(), title: 'Arkpedia Chibis Dev', transparent: true, frame: false, resizable: false, acceptFirstMouse: true, minimizable: true, maximizable: false, fullscreenable: false, hasShadow: false, alwaysOnTop, skipTaskbar: false, backgroundColor: '#00000000', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
     applyAlwaysOnTop();
     if (process.argv.includes('--window-diagnostics')) {
       for (const event of ['minimize', 'restore', 'show', 'hide']) {
@@ -101,7 +126,7 @@ else {
     }
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', e => e.preventDefault());
-    win.webContents.on('did-finish-load', publishSettings);
+    win.webContents.on('did-finish-load', () => { publishSettings(); publishDisplays(); });
     ipcMain.on('regions', (e, value) => {
       if (!trusted(e) || !Array.isArray(value) || value.length > MAX_REGIONS) return;
       regions = value.filter(r => r && ['x','y','width','height'].every(k => Number.isFinite(r[k])) && r.width > 0 && r.height > 0);
@@ -110,6 +135,7 @@ else {
     // Forwarded mousemove: the renderer reports at once when the cursor enters or leaves a chibi.
     ipcMain.on('hover', (e, value) => { if (trusted(e) && typeof value === 'boolean') { hovering = value; updateMouse(() => value); } });
     ipcMain.on('get-settings', e => { if (trusted(e)) publishSettings(); });
+    ipcMain.on('get-displays', e => { if (trusted(e)) publishDisplays(); });
     ipcMain.on('set-setting', (e, key, value) => { if (trusted(e) && KEYS.includes(key) && typeof value === 'boolean') change(key, value); });
     ipcMain.on('minimize', e => { if (trusted(e)) minimize(); });
     ipcMain.on('quit', e => { if (trusted(e)) app.quit(); });
@@ -120,7 +146,15 @@ else {
     tray = new Tray(icon); tray.setTitle('Chibi'); tray.setToolTip('Arkpedia Chibis Dev');
     buildMenus();
     tray.on('click', show);
-    screen.on('display-metrics-changed', () => win.setBounds(screen.getPrimaryDisplay().workArea));
+    const fitToDisplays = () => { if (!alive()) return; win.setBounds(unionBounds()); publishDisplays(); };
+    screen.on('display-added', fitToDisplays);
+    screen.on('display-removed', fitToDisplays);
+    screen.on('display-metrics-changed', fitToDisplays);
+    // A drag that ends outside the window never delivers pointerup here; without this the
+    // window would keep capturing every click (click-through stuck off) until it restarts.
+    const release = () => { dragging = false; hovering = false; updateMouse(overRegion); };
+    win.on('blur', release);
+    win.on('hide', release);
     win.on('closed', () => { clearInterval(timer); app.quit(); });
     await win.loadURL('arkchibi://app/');
   });
