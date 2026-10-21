@@ -25,15 +25,17 @@ Search for an operator or outfit and press +. Up to **32** chibis walk independe
 
 ## Overlay modes
 
-Both are remembered between launches (`settings.json` in the app's user-data folder) and can be changed from the picker's **Overlay** box, the tray / menu-bar menu, and the app menu. The tray menu also has **Quit companions**.
+Clicks on empty space always go to the apps below; the overlay only takes the mouse back over a chibi, the picker or the launcher. The remaining options are remembered between launches (`settings.json` in the app's user-data folder) and can be changed from the picker's **Overlay** box, the tray / menu-bar menu, and the app menu. The tray menu also has **Quit companions**.
 
-- **Always on top** (default on): the transparent, frameless overlay covering the primary display's work area stays above every window and on every workspace / Space, including over full-screen apps where the OS allows it. Off: it is an ordinary window that other windows can cover; bring it back from the taskbar/Dock or the tray.
-- **Click-through** (default on): clicks on empty space go to the apps below. When the cursor is over a chibi, the picker or the launcher, the overlay takes the mouse back so you can drag or tap it. Off: the overlay captures every click on the screen (useful for playing with chibis without hitting the apps below).
+- **Always on top** (default on): the overlay stays above every window. Off: it is an ordinary window that other windows can cover; bring it back from the taskbar/Dock or the tray.
+- **Follow across desktops** (default on): the chibis appear on every Space / workspace, including over full-screen apps where the OS allows it. Off: they stay on the desktop they were opened on. Independent of always-on-top.
+- **Clicks pass through chibis** (default off): the chibis stop taking the mouse entirely, so a click anywhere — including on a chibi — reaches the app underneath. The picker and launcher still work. Turn it off again to drag or tap chibis.
 
 | | macOS | Windows | Linux X11 | Linux Wayland |
 |---|---|---|---|---|
-| Always on top | `screen-saver` level, all Spaces, over full-screen apps | topmost (`screen-saver`), over the taskbar | `_NET_WM_STATE_ABOVE`, honoured by most window managers | Wayland has no always-on-top for apps. The app runs under XWayland (`--ozone-platform=x11`), where GNOME and KDE usually honour it; some compositors may not |
-| Click-through | forwarded mouse moves plus a cursor poll | forwarded mouse moves plus a cursor poll | cursor poll (no forwarding on Linux) | Pass-through works, but the app cannot see the pointer over native Wayland windows, so chibis may not respond while it is on. Launching the app again shows the controls **and turns click-through off**, so you are never locked out |
+| Always on top | `screen-saver` level | topmost (`screen-saver`), over the taskbar | `_NET_WM_STATE_ABOVE`, honoured by most window managers | Wayland has no always-on-top for apps. The app runs under XWayland (`--ozone-platform=x11`), where GNOME and KDE usually honour it; some compositors may not |
+| Follow across desktops | `canJoinAllSpaces` plus `fullScreenAuxiliary`; macOS may briefly hide the Dock icon while it switches process type | not applicable; a window is visible on its virtual desktop | `sticky` where the window manager supports it | compositor-dependent; not exposed to XWayland clients |
+| Taking the mouse back over a chibi | forwarded mouse moves plus a cursor poll | forwarded mouse moves plus a cursor poll | cursor poll (no forwarding on Linux) | the app cannot see the pointer over native Wayland windows, so chibis may not respond; relaunching shows the controls |
 | Tray | menu bar | notification area | needs a StatusNotifier / AppIndicator host (GNOME: the AppIndicator extension) | same |
 
 On Linux a compositing window manager is needed for transparency. Without a tray host, use the picker's **Overlay** box, or relaunch the app to show the controls.

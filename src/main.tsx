@@ -8,7 +8,7 @@ import { chooseChibiTap } from './lib/operators/chibiRoutine';
 import './style.css';
 
 type Region = { x:number; y:number; width:number; height:number };
-type Settings = { alwaysOnTop:boolean; clickThrough:boolean; walkHorizontal:boolean; walkVertical:boolean; lockToScreen:boolean };
+type Settings = { alwaysOnTop:boolean; followSpaces:boolean; clickChibis:boolean; walkHorizontal:boolean; walkVertical:boolean; lockToScreen:boolean };
 type Area = Region & { primary?: boolean };
 declare global { interface Window { companion?: {
   regions: (r: Region[]) => void; dragging: (value:boolean) => void; hover: (value:boolean) => void; minimize: () => void; quit: () => void;
@@ -110,7 +110,8 @@ function Modes({settings}:{settings:Settings|null}){
   return <>
   <fieldset className="modes"><legend>Overlay</legend>
     <label><input type="checkbox" checked={settings.alwaysOnTop} onChange={()=>toggle('alwaysOnTop')}/><span>Always on top<small>Chibis stay above every window</small></span></label>
-    <label><input type="checkbox" checked={settings.clickThrough} onChange={()=>toggle('clickThrough')}/><span>Click-through<small>Clicks pass to apps below, except on a chibi</small></span></label>
+    <label><input type="checkbox" checked={settings.followSpaces} onChange={()=>toggle('followSpaces')}/><span>Follow across desktops<small>Keeps the chibis on every Space, full-screen apps included</small></span></label>
+    <label><input type="checkbox" checked={settings.clickChibis} onChange={()=>toggle('clickChibis')}/><span>Clicks pass through chibis<small>Empty space always does. On: chibis are decoration</small></span></label>
   </fieldset>
   <fieldset className="modes"><legend>Walking</legend>
     <label><input type="checkbox" checked={settings.walkHorizontal} onChange={()=>toggle('walkHorizontal')}/><span>Side to side<small>Wander left and right</small></span></label>
@@ -120,8 +121,9 @@ function Modes({settings}:{settings:Settings|null}){
   </>;
 }
 function App(){
- const [open,setOpen]=useState(true),[query,setQuery]=useState(''),[pets,setPets]=useState<Pet[]>([]),[settings,setSettings]=useState<Settings|null>(null),[displays,setDisplays]=useState<Area[]>([]),[stage,setStage]=useState<ChibiStage|null>(null),next=useRef(0),canvas=useRef<HTMLCanvasElement>(null);
+ const [open,setOpen]=useState(true),[query,setQuery]=useState(''),[pets,setPets]=useState<Pet[]>([]),[settings,setSettings]=useState<Settings|null>(null),[displays,setDisplays]=useState<Area[]>([]),[stage,setStage]=useState<ChibiStage|null>(null),next=useRef(0),canvas=useRef<HTMLCanvasElement>(null),settingsRef=useRef<Settings|null>(null);
  // The bundled JSON has one literal shape per entry; Entry is the contract the stage relies on.
+ settingsRef.current=settings;
  const entries=catalogue as unknown as Entry[]; const matches=entries.filter(row=>row.name.toLowerCase().includes(query.toLowerCase())).slice(0,40);
  const full=pets.length>=MAX_CHIBIS;
  useEffect(()=>{const created=new ChibiStage(canvas.current!);setStage(created);return()=>created.dispose();},[]);
@@ -129,11 +131,13 @@ function App(){
  useEffect(()=>{const off=window.companion?.onDisplays(setDisplays);window.companion?.requestDisplays();return off;},[]);
  useEffect(()=>{const off=window.companion?.onSettings(setSettings);window.companion?.requestSettings();return off;},[]);
  useEffect(()=>{
-  // Only .interactive boxes: a chibi's controls sit inside its own box.
-  const publish=()=>window.companion?.regions(Array.from(document.querySelectorAll('.interactive')).map(el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};}));
+  // Only .interactive boxes: a chibi's controls sit inside its own box. When clicks pass
+  // through chibis, the chibis stop being interactive and empty space keeps the mouse.
+  const selector=()=>settingsRef.current?.clickChibis?'.interactive:not(.pet)':'.interactive';
+  const publish=()=>window.companion?.regions(Array.from(document.querySelectorAll(selector())).map(el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};}));
   // Forwarded mousemove (setIgnoreMouseEvents forward) reports a chibi under the cursor at once.
   let over=false;
-  const move=(e:MouseEvent)=>{const hit=!!document.elementFromPoint(e.clientX,e.clientY)?.closest('.interactive');if(hit!==over){over=hit;publish();window.companion?.hover(hit);}};
+  const move=(e:MouseEvent)=>{const hit=!!document.elementFromPoint(e.clientX,e.clientY)?.closest(selector());if(hit!==over){over=hit;publish();window.companion?.hover(hit);}};
   publish();const id=setInterval(publish,80);document.addEventListener('mousemove',move);
   return()=>{clearInterval(id);document.removeEventListener('mousemove',move);};
  },[]);

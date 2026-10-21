@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const DEFAULTS = Object.freeze({ alwaysOnTop: true, clickThrough: true, walkHorizontal: true, walkVertical: false, lockToScreen: true });
+const DEFAULTS = Object.freeze({ alwaysOnTop: true, followSpaces: true, clickChibis: false, walkHorizontal: true, walkVertical: false, lockToScreen: true });
 const KEYS = Object.keys(DEFAULTS);
 
 function normalize(value) {
@@ -41,9 +41,10 @@ function createSettings(file) {
  * Elsewhere floating is the widely supported level. */
 const topLevel = platform => platform === 'darwin' || platform === 'win32' ? 'screen-saver' : 'floating';
 
-/** The overlay passes the mouse through only in click-through mode, and never while a chibi
- * is held or the cursor is over a chibi or the controls. */
-const shouldIgnoreMouse = ({ clickThrough, dragging, overInteractive }) => clickThrough && !dragging && !overInteractive;
+/** Empty space always passes clicks through to the apps below. The mouse is taken back only
+ * while the cursor is over something interactive (chibi, picker, launcher) or a chibi is held;
+ * "clicks pass through chibis" simply stops the chibis from counting as interactive. */
+const shouldIgnoreMouse = ({ dragging, overInteractive }) => !dragging && !overInteractive;
 
 /** What the overlay can rely on per platform.
  * - macOS, Windows: forwarded mousemove and a global cursor position, so click-through can still

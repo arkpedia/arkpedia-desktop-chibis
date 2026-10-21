@@ -14,7 +14,8 @@ contextBridge.exposeInMainWorld('companion', {
   // Only the known boolean modes cross the bridge.
   onSettings: subscribe('settings', value => ({
     alwaysOnTop: value?.alwaysOnTop === true,
-    clickThrough: value?.clickThrough === true,
+    followSpaces: value?.followSpaces !== false,
+    clickChibis: value?.clickChibis === true,
     walkHorizontal: value?.walkHorizontal !== false,
     walkVertical: value?.walkVertical === true,
     lockToScreen: value?.lockToScreen !== false,

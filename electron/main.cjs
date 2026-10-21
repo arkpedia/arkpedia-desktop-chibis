@@ -62,24 +62,26 @@ const overRegion = () => {
 };
 const updateMouse = overInteractive => {
   if (!alive() || win.isMinimized() || !win.isVisible()) return;
-  const { clickThrough } = settings.get();
-  setIgnore(shouldIgnoreMouse({ clickThrough, dragging, overInteractive: clickThrough && overInteractive() }));
+  setIgnore(shouldIgnoreMouse({ dragging, overInteractive: overInteractive() }));
+};
+// Joining every Space is separate from the always-on-top z-order: a user may want the chibis
+// on every desktop without pinning them above other windows, or the other way round.
+const applySpaces = () => {
+  if (!alive()) return;
+  if (settings.get().followSpaces) win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  else win.setVisibleOnAllWorkspaces(false);
 };
 const applyAlwaysOnTop = () => {
   if (!alive()) return;
-  if (settings.get().alwaysOnTop) {
-    win.setAlwaysOnTop(true, topLevel(process.platform));
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  } else {
-    win.setVisibleOnAllWorkspaces(false);
-    win.setAlwaysOnTop(false);
-  }
+  if (settings.get().alwaysOnTop) win.setAlwaysOnTop(true, topLevel(process.platform));
+  else win.setAlwaysOnTop(false);
 };
 const settingItems = () => {
   const current = settings.get();
   return [
     { label: 'Always on top', type: 'checkbox', checked: current.alwaysOnTop, click: () => change('alwaysOnTop', !settings.get().alwaysOnTop) },
-    { label: 'Click-through', type: 'checkbox', checked: current.clickThrough, click: () => change('clickThrough', !settings.get().clickThrough) },
+    { label: 'Follow across desktops', type: 'checkbox', checked: current.followSpaces, click: () => change('followSpaces', !settings.get().followSpaces) },
+    { label: 'Clicks pass through chibis', type: 'checkbox', checked: current.clickChibis, click: () => change('clickChibis', !settings.get().clickChibis) },
     { type: 'separator' },
     { label: 'Walk side to side', type: 'checkbox', checked: current.walkHorizontal, click: () => change('walkHorizontal', !settings.get().walkHorizontal) },
     { label: 'Walk up and down', type: 'checkbox', checked: current.walkVertical, click: () => change('walkVertical', !settings.get().walkVertical) },
@@ -95,7 +97,7 @@ const publishSettings = () => { if (alive()) win.webContents.send('settings', se
 function change(key, value) {
   if (!settings.set(key, value)) return;
   if (key === 'alwaysOnTop') applyAlwaysOnTop();
-  if (key === 'clickThrough') updateMouse(overRegion);
+  if (key === 'followSpaces') applySpaces();
   buildMenus();
   publishSettings();
 }
@@ -103,7 +105,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   // Launching the app again always brings the controls back. Where click-through cannot see the
   // pointer (Linux Wayland), it also turns click-through off, or the controls could not be clicked.
-  app.on('second-instance', () => { if (!support.cursorTracking && settings?.get().clickThrough) change('clickThrough', false); show(); });
+  app.on('second-instance', () => show());
   app.on('activate', () => { if (win && (win.isMinimized() || !win.isVisible())) show(); });
   app.whenReady().then(async () => {
     settings = createSettings(path.join(app.getPath('userData'), 'settings.json'));
@@ -119,6 +121,7 @@ else {
     const { alwaysOnTop } = settings.get();
     win = new BrowserWindow({ ...unionBounds(), title: 'Arkpedia Chibis Dev', transparent: true, frame: false, resizable: false, acceptFirstMouse: true, minimizable: true, maximizable: false, fullscreenable: false, hasShadow: false, alwaysOnTop, skipTaskbar: false, backgroundColor: '#00000000', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
     applyAlwaysOnTop();
+    applySpaces();
     if (process.argv.includes('--window-diagnostics')) {
       for (const event of ['minimize', 'restore', 'show', 'hide']) {
         win.on(event, () => console.log(JSON.stringify({ event, minimized: win.isMinimized(), visible: win.isVisible() })));
@@ -152,6 +155,9 @@ else {
     screen.on('display-metrics-changed', fitToDisplays);
     // A drag that ends outside the window never delivers pointerup here; without this the
     // window would keep capturing every click (click-through stuck off) until it restarts.
+    // macOS can drop the "join all Spaces" flag when a window is restored; re-assert it
+    // without re-running the process-type transform that would blink the Dock.
+    win.on('restore', () => { if (settings.get().followSpaces) win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true }); });
     const release = () => { dragging = false; hovering = false; updateMouse(overRegion); };
     win.on('blur', release);
     win.on('hide', release);

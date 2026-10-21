@@ -103,7 +103,7 @@ for (const entry of ['activate', 'second-instance', 'tray', 'menu']) {
 const last = (calls, kind) => calls.filter(call => Array.isArray(call) && call[0] === kind).at(-1);
 const stored = userData => JSON.parse(fs.readFileSync(path.join(userData, 'settings.json'), 'utf8'));
 
-test('defaults: always on top at the per-OS level, on every workspace, click-through on', async () => {
+test('defaults: always on top at the per-OS level, on every workspace, chibis interactive', async () => {
   for (const [platform, level] of [['darwin', 'screen-saver'], ['win32', 'screen-saver'], ['linux', 'floating']]) {
     const { window, item } = await launch({ platform });
     assert.equal(window.options.alwaysOnTop, true);
@@ -111,7 +111,7 @@ test('defaults: always on top at the per-OS level, on every workspace, click-thr
     assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', true, { visibleOnFullScreen: true }]);
     assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
     assert.equal(item('Always on top').checked, true);
-    assert.equal(item('Click-through').checked, true);
+    assert.equal(item('Clicks pass through chibis').checked, false);
   }
 });
 
@@ -119,17 +119,17 @@ test('always on top off makes a normal window and is remembered', async () => {
   const { window, item, menu, userData } = await launch();
   item('Always on top').click();
   assert.deepEqual(last(window.calls, 'top'), ['top', false]);
-  assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', false]);
+  assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', true, { visibleOnFullScreen: true }], 'desktops are independent of z-order');
   assert.equal(item('Always on top').checked, false, 'menu rebuilt with the new state');
   assert.ok(window.calls.some(call => call === 'settings'), 'renderer told');
-  assert.deepEqual(stored(userData), { alwaysOnTop: false, clickThrough: true, walkHorizontal: true, walkVertical: false, lockToScreen: true });
+  assert.deepEqual(stored(userData), { alwaysOnTop: false, followSpaces: true, clickChibis: false, walkHorizontal: true, walkVertical: false, lockToScreen: true });
   assert.ok(menu().some(entry => entry.label === 'Quit companions'));
   const again = await launch({ settings: stored(userData) });
   assert.equal(again.window.options.alwaysOnTop, false);
   assert.deepEqual(last(again.window.calls, 'top'), ['top', false]);
 });
 
-test('click-through: transparent space passes through, a chibi under the cursor does not', async () => {
+test('empty space always passes through; a chibi under the cursor takes the mouse back', async () => {
   const { window, ipcMain, trusted, poll, cursor } = await launch();
   ipcMain.emit('regions', trusted, [{ x: 380, y: 380, width: 50, height: 50 }]);
   poll(); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false]);
@@ -146,9 +146,17 @@ test('walking axes default to horizontal only and are remembered', async () => {
   assert.equal(item('Walk side to side').checked, true);
   assert.equal(item('Walk up and down').checked, false);
   item('Walk up and down').click();
-  assert.deepEqual(stored(userData), { alwaysOnTop: true, clickThrough: true, walkHorizontal: true, walkVertical: true, lockToScreen: true });
+  assert.deepEqual(stored(userData), { alwaysOnTop: true, followSpaces: true, clickChibis: false, walkHorizontal: true, walkVertical: true, lockToScreen: true });
   item('Walk side to side').click();
-  assert.deepEqual(stored(userData), { alwaysOnTop: true, clickThrough: true, walkHorizontal: false, walkVertical: true, lockToScreen: true });
+  assert.deepEqual(stored(userData), { alwaysOnTop: true, followSpaces: true, clickChibis: false, walkHorizontal: false, walkVertical: true, lockToScreen: true });
+});
+
+test('following across desktops is a separate, remembered toggle', async () => {
+  const { item, window, userData } = await launch();
+  assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', true, { visibleOnFullScreen: true }]);
+  item('Follow across desktops').click();
+  assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', false]);
+  assert.equal(stored(userData).followSpaces, false);
 });
 
 test('the overlay covers every display and reports their layout in window coordinates', async () => {
@@ -159,15 +167,16 @@ test('the overlay covers every display and reports their layout in window coordi
   assert.deepEqual(window.sent.at(-1), ['displays', [{ x: 0, y: 0, width: 1280, height: 720, primary: true }]]);
 });
 
-test('click-through off captures the mouse everywhere, at once and on every poll', async () => {
+test('there is no mode that captures clicks over empty space', async () => {
   const { window, ipcMain, trusted, poll, userData } = await launch({ cursor: { x: 5, y: 5 } });
   assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
-  ipcMain.emit('set-setting', trusted, 'clickThrough', false);
-  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false]);
-  const count = window.calls.length; poll(); ipcMain.emit('hover', trusted, false);
-  assert.equal(window.calls.length, count, 'nothing re-enables pass-through');
-  assert.equal(stored(userData).clickThrough, false);
-  ipcMain.emit('set-setting', trusted, 'clickThrough', true);
+  ipcMain.emit('set-setting', trusted, 'clickChibis', true);
+  poll();
+  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }], 'still pass-through');
+  assert.equal(stored(userData).clickChibis, true);
+  // The renderer stops publishing chibis as interactive; their regions simply disappear.
+  ipcMain.emit('regions', trusted, [{ x: 380, y: 380, width: 50, height: 50 }]);
+  ipcMain.emit('hover', trusted, false);
   assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
 });
 
@@ -181,9 +190,9 @@ test('settings IPC accepts only known boolean keys from the app frame', async ()
 });
 
 test('a damaged settings file falls back to defaults', async () => {
-  const { window } = await launch({ settings: { alwaysOnTop: 'yes', clickThrough: false, extra: 1 } });
+  const { window } = await launch({ settings: { alwaysOnTop: 'yes', clickChibis: 'no', extra: 1 } });
   assert.equal(window.options.alwaysOnTop, true);
-  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false]);
+  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
 });
 
 test('hit regions for every chibi at the limit are accepted', async () => {
@@ -195,13 +204,12 @@ test('hit regions for every chibi at the limit are accepted', async () => {
   assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false], 'the last chibi is still grabbable');
 });
 
-test('Linux Wayland runs under XWayland and a relaunch turns click-through back off', async () => {
+test('Linux Wayland runs under XWayland and a relaunch shows the controls', async () => {
   const x11 = await launch({ platform: 'linux', env: { XDG_SESSION_TYPE: 'x11' } });
   assert.deepEqual(x11.switches, []);
   const { app, switches, window, userData } = await launch({ platform: 'linux', env: { XDG_SESSION_TYPE: 'wayland', WAYLAND_DISPLAY: 'wayland-0' } });
   assert.deepEqual(switches, [['ozone-platform', 'x11']]);
   app.emit('second-instance');
-  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false]);
-  assert.equal(stored(userData).clickThrough, false);
+  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
   assert.ok(window.calls.includes('show-controls'));
 });
