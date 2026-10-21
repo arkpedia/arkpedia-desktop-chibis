@@ -53,7 +53,7 @@
         "zip"
       ]
     },
-    "artifactName": "Arkpedia-Chibis-Dev-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Arkpedia-Chibis-Dev-${os}-${arch}.${ext}",
     "nsis": {
       "oneClick": false,
       "perMachine": false,

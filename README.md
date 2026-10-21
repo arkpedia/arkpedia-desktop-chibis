@@ -8,14 +8,16 @@ Arknights chibis walking on your desktop, for macOS, Windows and Linux. A separa
 
 | Your computer | File to pick |
 |---|---|
-| macOS, Apple Silicon (M1–M4) | `…-mac-arm64.dmg` |
-| macOS, Intel | `…-mac-x64.dmg` |
-| Windows, most PCs | `…-win-x64.exe` |
-| Windows on ARM | `…-win-arm64.exe` |
-| Linux, x86-64 | `…-linux-x86_64.AppImage` |
-| Linux, ARM64 | `…-linux-arm64.AppImage` |
+| macOS, Apple Silicon (M1–M4) | [`Arkpedia-Chibis-Dev-mac-arm64.dmg`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-mac-arm64.dmg) |
+| macOS, Intel | [`Arkpedia-Chibis-Dev-mac-x64.dmg`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-mac-x64.dmg) |
+| Windows, most PCs | [`Arkpedia-Chibis-Dev-win-x64.exe`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-win-x64.exe) |
+| Windows on ARM | [`Arkpedia-Chibis-Dev-win-arm64.exe`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-win-arm64.exe) |
+| Linux, x86-64 | [`Arkpedia-Chibis-Dev-linux-x86_64.AppImage`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-linux-x86_64.AppImage) |
+| Linux, ARM64 | [`Arkpedia-Chibis-Dev-linux-arm64.AppImage`](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest/download/Arkpedia-Chibis-Dev-linux-arm64.AppImage) |
 
-Every filename starts with `Arkpedia-Chibis-Dev-<version>-`. Each platform also has a portable `.zip` (macOS, Windows) and a `.deb` (Linux) on the same release page, plus `SHA256SUMS.txt` to check what you downloaded. The builds are unsigned development previews: on macOS the first open needs right-click → **Open**, and Windows shows a SmartScreen "unknown publisher" warning → **More info** → **Run anyway**.
+Filenames never change between versions, so any of those links keeps working after a release: it always serves the newest build. Each platform also has a portable `.zip` (macOS, Windows) and a `.deb` (Linux) with the same naming, plus `SHA256SUMS.txt` on the release page.
+
+The builds are unsigned development previews: on macOS the first open needs right-click → **Open**, and Windows shows a SmartScreen "unknown publisher" warning → **More info** → **Run anyway**.
 
 ## Using it
 
