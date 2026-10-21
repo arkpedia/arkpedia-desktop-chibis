@@ -52,7 +52,7 @@ The overlay covers every display's work area, so you can drag a chibi from one s
 
 Every chibi is drawn by **one WebGL context on one full-window canvas**. Browsers and Electron keep only about 16 live WebGL contexts and drop the oldest, which is why one canvas per chibi breaks above 15. `tests/spine-guards.test.mjs` fails if a second context or scene renderer appears. Copies of the same chibi share their skeleton data and textures.
 
-A chibi's size is set once, from its visible idle pose, and does not change when it plays a reaction with larger bounds. Art may extend past the hit box instead of being shrunk to fit.
+A chibi's size is set once, from the **height** of its visible idle pose, and does not change when it plays a reaction with larger bounds. Width is deliberately ignored: a wide weapon, cape or banner must not make the character smaller than the others, so the art may extend past its square hit box instead of being shrunk to fit.
 
 Texture pages are uploaded premultiplied (`src/lib/spine/premultipliedTexture.ts`, `UNPACK_PREMULTIPLY_ALPHA_WEBGL`) and every skeleton is drawn with `premultipliedAlpha = true`, because spine-ts 3.8 blends Screen and Multiply slots as premultiplied either way. The guard test also holds every renderer to this.
 

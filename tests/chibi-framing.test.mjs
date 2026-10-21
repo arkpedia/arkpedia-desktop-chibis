@@ -17,10 +17,12 @@ test('scale comes from the idle pose and the box only', () => {
   }
 });
 
-test('a larger box scales up proportionally; a wide pose fits the width', () => {
+test('a larger box scales up proportionally; width never shrinks a chibi', () => {
   assert.ok(Math.abs(chibiScale(idle, 300, 337.5) / chibiScale(idle, 150, 168.75) - 2) < 1e-9);
-  const wide = { x: -400, y: 0, width: 800, height: 100 };
-  assert.ok(Math.abs(chibiScale(wide, 150, 168.75) * 800 * 1.4 - 150) < 1e-9);
+  // A wide pose keeps the same on-screen height as a narrow one and overhangs the box instead.
+  const wide = { x: -400, y: 0, width: 800, height: 200 };
+  assert.equal(chibiScale(wide, 150, 168.75), chibiScale(idle, 150, 168.75));
+  assert.ok(wide.width * chibiScale(wide, 150, 168.75) > 150, 'wide art overflows the hit box');
 });
 
 test('the idle centre sits on the box centre, flipped or not', () => {

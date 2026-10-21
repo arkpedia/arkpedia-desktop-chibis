@@ -14,13 +14,13 @@ export function finiteBounds(bounds: ChibiBounds): ChibiBounds {
   return [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) && bounds.width > 0 && bounds.height > 0 ? bounds : FALLBACK;
 }
 
-/** CSS pixels per skeleton unit. It depends only on the idle pose, measured once when the model
- * loads, and on the hit box the user sized, never on the clip playing, so a chibi keeps its
- * size when a tap switches it to a reaction with larger bounds. */
-export function chibiScale(idle: ChibiBounds, boxWidth: number, boxHeight: number): number {
-  const { width, height } = finiteBounds(idle);
-  const w = Math.max(1, boxWidth), h = Math.max(1, boxHeight);
-  return h / Math.max(height * CHIBI_FRAME_MARGIN, width * h / w * CHIBI_FRAME_MARGIN, 1);
+/** CSS pixels per skeleton unit. It depends only on the idle pose's HEIGHT, measured once when
+ * the model loads, and on the hit box's height, never on the clip playing or on how far a pose's
+ * props reach sideways. Fitting the width as well made every chibi with a wide weapon, cape or
+ * banner visibly smaller than the rest; art is allowed to overhang the hit box instead. */
+export function chibiScale(_idle: ChibiBounds, _boxWidth: number, boxHeight: number): number {
+  const { height } = finiteBounds(_idle);
+  return Math.max(1, boxHeight) / Math.max(height * CHIBI_FRAME_MARGIN, 1);
 }
 
 /** Where to put the skeleton root so the idle pose's centre sits at the hit box's centre, in a
