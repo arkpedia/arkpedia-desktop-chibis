@@ -10,16 +10,20 @@ import './style.css';
 type Region = { x:number; y:number; width:number; height:number };
 type Settings = { alwaysOnTop:boolean; followSpaces:boolean; clickChibis:boolean; walkHorizontal:boolean; walkVertical:boolean; lockToScreen:boolean };
 type Area = Region & { primary?: boolean };
-declare global { interface Window { companion?: {
-  regions: (r: Region[]) => void; dragging: (value:boolean) => void; hover: (value:boolean) => void; minimize: () => void; quit: () => void;
-  onShow: (callback:()=>void) => ()=>void; onSettings: (callback:(value:Settings)=>void) => ()=>void; requestSettings: () => void; setSetting: (key:keyof Settings, value:boolean) => void;
-  onDisplays: (callback:(value:Area[])=>void) => ()=>void; requestDisplays: () => void;
-} } }
 type Entry = { id:string; name:string; model:ChibiModel };
 type Pet = { id:number; entry:Entry };
+declare global { interface Window { companion?: {
+  regions: (r: Region[]) => void; dragging: (value:boolean) => void; hover: (value:boolean) => void; minimize: () => void; quit: () => void;
+  onSettings: (callback:(value:Settings)=>void) => ()=>void; requestSettings: () => void; setSetting: (key:keyof Settings, value:boolean) => void;
+  onDisplays: (callback:(value:Area[])=>void) => ()=>void; requestDisplays: () => void;
+  addChibi: (entry:Entry) => void; onAdded: (callback:(entry:Entry)=>void) => ()=>void; onClear: (callback:()=>void) => ()=>void;
+  clearChibis: () => void; reportCount: (count:number) => void; onCount: (callback:(count:number)=>void) => ()=>void;
+} } }
 /** One shared WebGL stage draws every chibi, so this is a comfort limit, not a context limit. */
 export const MAX_CHIBIS = limits.maxChibis;
 const StageContext = createContext<ChibiStage | null>(null);
+const role = new URLSearchParams(location.search).get('role') === 'panel' ? 'panel' : 'overlay';
+document.body.classList.add(`role-${role}`);
 /** The display whose work area holds this point, or the nearest one if it falls in a gap. */
 const areaAt=(areas:Area[],x:number,y:number):Area=>{
   const inside=areas.find(a=>x>=a.x&&x<=a.x+a.width&&y>=a.y&&y<=a.y+a.height);
@@ -94,7 +98,8 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
     frame=requestAnimationFrame(step);return()=>{cancelAnimationFrame(frame);endDrag();window.removeEventListener('pointerup',endDrag);window.removeEventListener('pointercancel',endDrag);window.removeEventListener('blur',endDrag);};
   },[]);
   function tap(){const next=chooseChibiTap(animations.current,firstTap.current);firstTap.current=false;if(next){setReaction(next.clip);setSequence(n=>n+1);}}
-  return <div className="pet interactive" ref={node} style={{width:size,height:size*1.125}} role="group" aria-label={`${pet.entry.name} desktop chibi`} tabIndex={0} title="Tap to interact · Drag to move"
+  // When clicks pass through chibis they stop being interactive, so main never takes the mouse.
+  return <div className={`pet${settings?.clickChibis?'':' interactive'}`} ref={node} style={{width:size,height:size*1.125}} role="group" aria-label={`${pet.entry.name} desktop chibi`} tabIndex={0} title="Tap to interact · Drag to move"
     onPointerDown={e=>{if(e.button!==0||(e.target as Element).closest('button'))return;e.preventDefault();const parent=node.current!;parent.focus();parent.setPointerCapture(e.pointerId);drag.current={x:e.clientX-state.current.x,y:e.clientY-state.current.y,startX:e.clientX,startY:e.clientY,moved:false};window.companion?.dragging(true);}}
     onPointerMove={e=>{const d=drag.current;if(!d)return;d.moved ||= Math.hypot(e.clientX-d.startX,e.clientY-d.startY)>5;state.current.x=e.clientX-d.x;state.current.y=e.clientY-d.y;}}
     onPointerUp={e=>{const d=drag.current;drag.current=null;window.companion?.dragging(false);if(d&&!d.moved)tap();if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
@@ -104,6 +109,7 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
     <div className="pet-controls"><button aria-label="Smaller" disabled={size<=80} onClick={()=>setSize(n=>Math.max(80,n-20))}>−</button><button aria-label={paused?'Resume':'Pause'} onClick={()=>setPaused(v=>!v)}>{paused?'▶':'Ⅱ'}</button><button aria-label="Larger" disabled={size>=300} onClick={()=>setSize(n=>Math.min(300,n+20))}>+</button><button aria-label="Remove chibi" onClick={remove}>×</button></div>
   </div>;
 }
+
 function Modes({settings}:{settings:Settings|null}){
   if(!settings||!window.companion)return null;
   const toggle=(key:keyof Settings)=>window.companion?.setSetting(key,!settings[key]);
@@ -120,33 +126,47 @@ function Modes({settings}:{settings:Settings|null}){
   </fieldset>
   </>;
 }
-function App(){
- const [open,setOpen]=useState(true),[query,setQuery]=useState(''),[pets,setPets]=useState<Pet[]>([]),[settings,setSettings]=useState<Settings|null>(null),[displays,setDisplays]=useState<Area[]>([]),[stage,setStage]=useState<ChibiStage|null>(null),next=useRef(0),canvas=useRef<HTMLCanvasElement>(null),settingsRef=useRef<Settings|null>(null);
- // The bundled JSON has one literal shape per entry; Entry is the contract the stage relies on.
- settingsRef.current=settings;
- const entries=catalogue as unknown as Entry[]; const matches=entries.filter(row=>row.name.toLowerCase().includes(query.toLowerCase())).slice(0,40);
- const full=pets.length>=MAX_CHIBIS;
- useEffect(()=>{const created=new ChibiStage(canvas.current!);setStage(created);return()=>created.dispose();},[]);
- useEffect(()=>window.companion?.onShow(()=>setOpen(true)),[]);
- useEffect(()=>{const off=window.companion?.onDisplays(setDisplays);window.companion?.requestDisplays();return off;},[]);
- useEffect(()=>{const off=window.companion?.onSettings(setSettings);window.companion?.requestSettings();return off;},[]);
- useEffect(()=>{
-  // Only .interactive boxes: a chibi's controls sit inside its own box. When clicks pass
-  // through chibis, the chibis stop being interactive and empty space keeps the mouse.
-  const selector=()=>settingsRef.current?.clickChibis?'.interactive:not(.pet)':'.interactive';
-  const publish=()=>window.companion?.regions(Array.from(document.querySelectorAll(selector())).map(el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};}));
-  // Forwarded mousemove (setIgnoreMouseEvents forward) reports a chibi under the cursor at once.
-  let over=false;
-  const move=(e:MouseEvent)=>{const hit=!!document.elementFromPoint(e.clientX,e.clientY)?.closest(selector());if(hit!==over){over=hit;publish();window.companion?.hover(hit);}};
-  publish();const id=setInterval(publish,80);document.addEventListener('mousemove',move);
-  return()=>{clearInterval(id);document.removeEventListener('mousemove',move);};
- },[]);
- return <><canvas className="stage" ref={canvas} aria-hidden="true"/>
- {open?<aside className="panel interactive"><header><div><small>ARKPEDIA · DEV PREVIEW</small><h1>Desktop chibis</h1></div><button className="minimize" aria-label="Minimize to the Dock or taskbar" title="Minimize to the Dock or taskbar" onClick={()=>window.companion?.minimize()}>−</button></header><p>Add a companion. Drag to move, tap to interact.</p><input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
- <div className="choices" aria-label="Available chibis">{matches.map(entry=><button key={entry.id} disabled={full} onClick={()=>setPets(p=>p.length>=MAX_CHIBIS?p:[...p,{id:++next.current,entry}])}><span>{entry.name}</span><b>+</b></button>)}</div>
- <Modes settings={settings}/>
- <footer><span>{pets.length?`${pets.length} of ${MAX_CHIBIS} on your desktop`:'Your desktop is ready'}{full?' · Limit reached':''}</span><div className="footer-actions"><button onClick={()=>setOpen(false)}>Hide picker</button><button onClick={()=>window.companion?.quit()}>Quit</button></div></footer></aside>:<div className="launcher interactive"><button onClick={()=>setOpen(true)}>Chibis +</button></div>}
- <StageContext.Provider value={stage}>{pets.map(pet=><Walker key={pet.id} pet={pet} settings={settings} displays={displays} remove={()=>setPets(p=>p.filter(row=>row.id!==pet.id))}/>)}</StageContext.Provider>
- </>;
+
+/** The transparent, click-through window the chibis live in. No picker, no launcher. */
+function Overlay(){
+  const [pets,setPets]=useState<Pet[]>([]),[settings,setSettings]=useState<Settings|null>(null),[displays,setDisplays]=useState<Area[]>([]),[stage,setStage]=useState<ChibiStage|null>(null);
+  const next=useRef(0),canvas=useRef<HTMLCanvasElement>(null);
+  useEffect(()=>{const created=new ChibiStage(canvas.current!);setStage(created);return()=>created.dispose();},[]);
+  useEffect(()=>{const off=window.companion?.onSettings(setSettings);window.companion?.requestSettings();return off;},[]);
+  useEffect(()=>{const off=window.companion?.onDisplays(setDisplays);window.companion?.requestDisplays();return off;},[]);
+  useEffect(()=>{const off=window.companion?.onAdded(entry=>setPets(rows=>rows.length>=MAX_CHIBIS?rows:[...rows,{id:++next.current,entry}]));return off;},[]);
+  useEffect(()=>{const off=window.companion?.onClear(()=>setPets([]));return off;},[]);
+  useEffect(()=>{window.companion?.reportCount(pets.length);},[pets.length]);
+  useEffect(()=>{
+    // Only .interactive boxes: a chibi's controls sit inside its own box and stop being
+    // interactive altogether when clicks pass through chibis.
+    const publish=()=>window.companion?.regions(Array.from(document.querySelectorAll('.interactive')).map(el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};}));
+    // Forwarded mousemove (setIgnoreMouseEvents forward) reports a chibi under the cursor at once.
+    let over=false;
+    const move=(e:MouseEvent)=>{const hit=!!document.elementFromPoint(e.clientX,e.clientY)?.closest('.interactive');if(hit!==over){over=hit;publish();window.companion?.hover(hit);}};
+    publish();const id=setInterval(publish,80);document.addEventListener('mousemove',move);
+    return()=>{clearInterval(id);document.removeEventListener('mousemove',move);};
+  },[]);
+  return <><canvas className="stage" ref={canvas} aria-hidden="true"/>
+  <StageContext.Provider value={stage}>{pets.map(pet=><Walker key={pet.id} pet={pet} settings={settings} displays={displays} remove={()=>setPets(rows=>rows.filter(row=>row.id!==pet.id))}/>)}</StageContext.Provider></>;
 }
-createRoot(document.getElementById('root')!).render(<App/>);
+
+/** The picker: a normal window that can be minimized without touching the chibis. */
+function Panel(){
+  const [query,setQuery]=useState(''),[settings,setSettings]=useState<Settings|null>(null),[count,setCount]=useState(0);
+  useEffect(()=>{const off=window.companion?.onSettings(setSettings);window.companion?.requestSettings();return off;},[]);
+  useEffect(()=>{const off=window.companion?.onCount(setCount);return off;},[]);
+  const entries=catalogue as unknown as Entry[];
+  const matches=entries.filter(row=>row.name.toLowerCase().includes(query.toLowerCase())).slice(0,60);
+  const full=count>=MAX_CHIBIS;
+  return <main className="panel">
+    <header><div><small>ARKPEDIA · DEV PREVIEW</small><h1>Desktop chibis</h1></div><button className="minimize" aria-label="Minimize the picker" title="Minimize the picker" onClick={()=>window.companion?.minimize()}>−</button></header>
+    <p>The chibis live in their own window and keep walking when this one is minimized. Drag them anywhere; tap for a reaction.</p>
+    <input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
+    <div className="choices" aria-label="Available chibis">{matches.map(entry=><button key={entry.id} disabled={full} onClick={()=>window.companion?.addChibi(entry)}><span>{entry.name}</span><b>+</b></button>)}</div>
+    <Modes settings={settings}/>
+    <footer><span>{count?`${count} of ${MAX_CHIBIS} on your desktop`:'No chibis yet'}{full?' · Limit reached':''}</span><div className="footer-actions"><button onClick={()=>window.companion?.clearChibis()}>Clear all</button><button onClick={()=>window.companion?.quit()}>Quit</button></div></footer>
+  </main>;
+}
+
+createRoot(document.getElementById('root')!).render(role==='panel'?<Panel/>:<Overlay/>);

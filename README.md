@@ -21,7 +21,9 @@ The builds are unsigned development previews. On **macOS** the app is ad-hoc sig
 
 ## Using it
 
-Search for an operator or outfit and press +. Up to **32** chibis walk independently. Drag a chibi to place it; tap it for its native reaction. Hover or focus it for size, pause and remove controls. Arrow keys move a focused chibi; Escape removes it. **−** minimizes the app to the Dock or taskbar, as the OS normally does; bring it back from there, from the tray menu, or by launching it again. **Hide picker** instead puts the picker away behind a small **Chibis +** launcher while the chibis keep walking. Placements reset when the app quits. Artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
+The app runs as **two windows**: the chibis live in a transparent, click-through overlay, and the picker is an ordinary window with a title bar. Search for an operator or outfit in the picker and press +. Up to **32** chibis walk independently; drag one to place it, tap it for its native reaction, hover or focus it for size, pause and remove controls. Arrow keys move a focused chibi; Escape removes it. **Clear all** empties the desktop.
+
+Because the picker is just a window, minimizing it (or closing the picker window's own controls) leaves the chibis walking. Reopen it from the Dock/taskbar, the tray menu's **Show companion controls**, or by launching the app again. Closing the picker window quits the app. Placements reset when the app quits; artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
 
 ## Overlay modes
 

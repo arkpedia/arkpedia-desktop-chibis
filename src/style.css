@@ -4,3 +4,7 @@
 
 .stage{position:fixed;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;display:block}.panel,.launcher{z-index:1}
 .modes{border:1px solid #3a565d;border-radius:8px;margin:0;padding:8px 12px 10px;display:grid;gap:8px}.modes legend{font-size:10px;color:#58dbca;letter-spacing:.16em;text-transform:uppercase;padding:0 4px}.modes label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}.modes input{width:auto;margin:3px 0 0;accent-color:#58dbca}.modes span{display:grid;gap:2px}.modes small{letter-spacing:0;color:#aabdc3;font-size:11px}
+
+/* The picker is its own normal window now; the chibis get the whole screen in theirs. */
+body.role-panel{background:#0e1a20;pointer-events:auto}
+body.role-panel .panel{position:static;width:100%;max-width:none;height:100vh;max-height:none;border:0;border-radius:0;box-shadow:none;background:#0e1a20}

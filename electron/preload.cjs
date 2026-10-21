@@ -10,7 +10,8 @@ contextBridge.exposeInMainWorld('companion', {
   hover: value => ipcRenderer.send('hover', value),
   minimize: () => ipcRenderer.send('minimize'),
   quit: () => ipcRenderer.send('quit'),
-  onShow: subscribe('show-controls', () => undefined),
+  onAdded: subscribe('added', value => value),
+  onClear: subscribe('clear-chibis', () => undefined),
   // Only the known boolean modes cross the bridge.
   onSettings: subscribe('settings', value => ({
     alwaysOnTop: value?.alwaysOnTop === true,
@@ -23,5 +24,9 @@ contextBridge.exposeInMainWorld('companion', {
   onDisplays: subscribe('displays', value => Array.isArray(value) ? value : []),
   requestDisplays: () => ipcRenderer.send('get-displays'),
   requestSettings: () => ipcRenderer.send('get-settings'),
+  addChibi: entry => ipcRenderer.send('add-chibi', entry),
+  clearChibis: () => ipcRenderer.send('clear-chibis'),
+  reportCount: count => ipcRenderer.send('count', count),
+  onCount: subscribe('count', value => Number(value) || 0),
   setSetting: (key, value) => ipcRenderer.send('set-setting', key, value),
 });

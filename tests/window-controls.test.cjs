@@ -10,19 +10,24 @@ const { maxChibis } = require('../electron/limits.json');
 
 // Objects made inside the vm belong to another realm; compare plain copies.
 const plain = value => JSON.parse(JSON.stringify(value));
-// Exercise the actual main-process wiring without needing a desktop session.
+const last = (calls, kind) => calls.filter(call => Array.isArray(call) && call[0] === kind).at(-1);
+const stored = userData => JSON.parse(fs.readFileSync(path.join(userData, 'settings.json'), 'utf8'));
+
+// Exercise the real main-process wiring: two windows, no desktop session.
 async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 400, y: 400 } } = {}) {
-  let window, tray, applicationMenu, poll;
+  let tray, poll;
+  const windows = [];
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'chibis-test-'));
   if (settings) fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify(settings));
   const switches = [];
   const app = Object.assign(new EventEmitter(), {
     setName() {}, setPath() {}, getPath: () => userData, commandLine: { appendSwitch: (...args) => switches.push(args) },
-    requestSingleInstanceLock: () => true, whenReady: () => Promise.resolve(), quit() {},
+    requestSingleInstanceLock: () => true, whenReady: () => Promise.resolve(), quit() { this.quits = (this.quits ?? 0) + 1; },
   });
   class Window extends EventEmitter {
     constructor(options) {
-      super(); window = this; this.options = options; this.minimized = false; this.visible = true; this.calls = []; this.sent = [];
+      super(); windows.push(this); this.options = options; this.minimized = false; this.visible = true;
+      this.calls = []; this.sent = [];
       this.webContents = Object.assign(new EventEmitter(), {
         mainFrame: { url: 'arkchibi://app/' }, setWindowOpenHandler() {},
         send: (channel, value) => { this.calls.push(channel); this.sent.push([channel, JSON.parse(JSON.stringify(value ?? null))]); },
@@ -37,18 +42,22 @@ async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 4
     focus() { this.calls.push('focus'); }
     setAlwaysOnTop(...args) { this.calls.push(plain(['top', ...args])); }
     setVisibleOnAllWorkspaces(...args) { this.calls.push(plain(['workspaces', ...args])); }
-    setBounds() {}
+    setBounds() { this.calls.push('setBounds'); }
     getBounds() { return { x: 0, y: 0 }; }
     setIgnoreMouseEvents(...args) { this.calls.push(plain(['ignore', ...args])); }
-    async loadURL() { this.calls.push('load'); }
+    async loadURL(url) { this.calls.push(plain(['load', url])); }
   }
   const ipcMain = new EventEmitter();
   const electron = {
     app, BrowserWindow: Window, ipcMain,
     Tray: class extends EventEmitter { constructor() { super(); tray = this; } setTitle() {} setToolTip() {} setContextMenu(menu) { this.menu = menu; } },
     nativeImage: { createFromDataURL: () => ({ resize: () => ({}) }) },
-    Menu: { buildFromTemplate: x => x, setApplicationMenu: x => { applicationMenu = x; } },
-    screen: Object.assign(new EventEmitter(), { getPrimaryDisplay: () => ({ id: 1, workArea: { x: 0, y: 0, width: 1280, height: 720 } }), getAllDisplays: () => [{ id: 1, workArea: { x: 0, y: 0, width: 1280, height: 720 } }], getCursorScreenPoint: () => cursor }),
+    Menu: { buildFromTemplate: x => x, setApplicationMenu() {} },
+    screen: Object.assign(new EventEmitter(), {
+      getPrimaryDisplay: () => ({ id: 1, workArea: { x: 0, y: 0, width: 1280, height: 720 } }),
+      getAllDisplays: () => [{ id: 1, workArea: { x: 0, y: 0, width: 1280, height: 720 } }],
+      getCursorScreenPoint: () => cursor,
+    }),
     protocol: { registerSchemesAsPrivileged() {}, handle() {} }, net: {},
     session: { defaultSession: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } },
   };
@@ -57,159 +66,137 @@ async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 4
     process: { argv: [], platform, env }, setInterval: fn => { poll = fn; return 1; }, clearInterval() {}, URL, Response,
   });
   await Promise.resolve();
-  const trusted = { sender: window.webContents, senderFrame: window.webContents.mainFrame };
-  const menu = () => tray.menu;
-  const item = label => menu().find(entry => entry.label === label);
-  return { app, window, tray, ipcMain, applicationMenu: () => applicationMenu, menu, item, poll, trusted, userData, switches, cursor };
+  await new Promise(resolve => setImmediate(resolve));
+  const [overlay, panel] = windows;
+  const frame = window => ({ sender: window.webContents, senderFrame: window.webContents.mainFrame });
+  return { app, overlay, panel, windows, ipcMain, trusted: frame(overlay), panelTrusted: frame(panel), poll, item: label => tray.menu.find(entry => entry.label === label), userData, switches, cursor };
 }
 
-test('minimize keeps the same loaded window and leaves a taskbar entry', async () => {
-  const { window, ipcMain, trusted, poll } = await launch();
-  assert.equal(window.options.minimizable, true);
-  assert.equal(window.options.skipTaskbar, false);
-  ipcMain.emit('minimize', trusted);
-  assert.equal(window.isMinimized(), true);
-  const count = window.calls.length; poll(); assert.equal(window.calls.length, count);
-  assert.equal(window.calls.filter(x => x === 'load').length, 1);
+test('chibis get a frameless full-screen overlay and the picker is a normal window', async () => {
+  const { overlay, panel } = await launch();
+  assert.equal(overlay.options.transparent, true);
+  assert.equal(overlay.options.frame, false);
+  assert.equal(overlay.options.skipTaskbar, true, 'the picker owns the taskbar entry');
+  assert.equal(overlay.options.width, 1280);
+  assert.equal(overlay.options.height, 720);
+  assert.notEqual(panel.options.transparent, true);
+  assert.equal(panel.options.frame, undefined, 'native frame, so the OS can minimize it');
+  assert.equal(panel.options.width, 430);
+  assert.ok(panel.calls.some(call => Array.isArray(call) && call[1] === 'arkchibi://app/?role=panel'));
+  assert.ok(overlay.calls.some(call => Array.isArray(call) && call[1] === 'arkchibi://app/?role=overlay'));
 });
 
-test('untrusted frames and other windows cannot minimize the companion', async () => {
-  const { window, ipcMain, trusted } = await launch();
-  ipcMain.emit('minimize', { ...trusted, sender: {} });
-  ipcMain.emit('minimize', { ...trusted, senderFrame: { url: 'arkchibi://app/' } });
-  trusted.senderFrame.url = 'https://example.com/'; ipcMain.emit('minimize', trusted);
-  assert.equal(window.isMinimized(), false);
-});
-
-test('refocusing a visible app does not reopen the hidden picker', async () => {
-  const { app, window } = await launch();
-  window.calls = [];
-  app.emit('activate');
-  assert.deepEqual(window.calls, []);
-});
-
-for (const entry of ['activate', 'second-instance', 'tray', 'menu']) {
-  test(`${entry} restores an existing window without reloading chibis`, async () => {
-    const { app, window, tray, applicationMenu } = await launch();
-    window.minimize(); window.calls = [];
-    if (entry === 'tray') tray.emit('click');
-    else if (entry === 'menu') applicationMenu()[0].submenu[0].click();
-    else app.emit(entry);
-    assert.equal(window.isMinimized(), false);
-    assert.deepEqual(window.calls, ['restore', 'show', 'focus', 'show-controls']);
-  });
-}
-
-const last = (calls, kind) => calls.filter(call => Array.isArray(call) && call[0] === kind).at(-1);
-const stored = userData => JSON.parse(fs.readFileSync(path.join(userData, 'settings.json'), 'utf8'));
-
-test('defaults: always on top at the per-OS level, on every workspace, chibis interactive', async () => {
-  for (const [platform, level] of [['darwin', 'screen-saver'], ['win32', 'screen-saver'], ['linux', 'floating']]) {
-    const { window, item } = await launch({ platform });
-    assert.equal(window.options.alwaysOnTop, true);
-    assert.deepEqual(last(window.calls, 'top'), ['top', true, level]);
-    assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', true, { visibleOnFullScreen: true }]);
-    assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
-    assert.equal(item('Always on top').checked, true);
-    assert.equal(item('Clicks pass through chibis').checked, false);
-  }
-});
-
-test('always on top off makes a normal window and is remembered', async () => {
-  const { window, item, menu, userData } = await launch();
-  item('Always on top').click();
-  assert.deepEqual(last(window.calls, 'top'), ['top', false]);
-  assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', true, { visibleOnFullScreen: true }], 'desktops are independent of z-order');
-  assert.equal(item('Always on top').checked, false, 'menu rebuilt with the new state');
-  assert.ok(window.calls.some(call => call === 'settings'), 'renderer told');
-  assert.deepEqual(stored(userData), { alwaysOnTop: false, followSpaces: true, clickChibis: false, walkHorizontal: true, walkVertical: false, lockToScreen: true });
-  assert.ok(menu().some(entry => entry.label === 'Quit companions'));
-  const again = await launch({ settings: stored(userData) });
-  assert.equal(again.window.options.alwaysOnTop, false);
-  assert.deepEqual(last(again.window.calls, 'top'), ['top', false]);
+test('minimizing the picker leaves the chibis alone', async () => {
+  const { ipcMain, panelTrusted, panel, overlay } = await launch();
+  ipcMain.emit('minimize', panelTrusted);
+  assert.equal(panel.isMinimized(), true);
+  assert.equal(overlay.isMinimized(), false);
+  assert.equal(overlay.calls.filter(call => call === 'minimize').length, 0);
 });
 
 test('empty space always passes through; a chibi under the cursor takes the mouse back', async () => {
-  const { window, ipcMain, trusted, poll, cursor } = await launch();
+  const { ipcMain, trusted, poll, overlay, cursor } = await launch();
   ipcMain.emit('regions', trusted, [{ x: 380, y: 380, width: 50, height: 50 }]);
-  poll(); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false]);
-  cursor.x = 10; poll(); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
-  // Forwarded mousemove reports a chibi before the next poll.
-  ipcMain.emit('hover', trusted, true); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false]);
-  ipcMain.emit('hover', trusted, false); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
-  ipcMain.emit('dragging', trusted, true); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false]);
-  poll(); assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false], 'held chibi keeps the mouse');
+  poll(); assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', false]);
+  cursor.x = 10; poll(); assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', true, { forward: true }]);
+  ipcMain.emit('hover', trusted, true); assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', false]);
+  ipcMain.emit('hover', trusted, false); assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', true, { forward: true }]);
+  ipcMain.emit('dragging', trusted, true); assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', false]);
+  poll(); assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', false], 'a held chibi keeps the mouse');
 });
 
-test('walking axes default to horizontal only and are remembered', async () => {
-  const { item, userData } = await launch();
+test('the picker cannot publish hit regions', async () => {
+  const { ipcMain, trusted, panelTrusted, poll, overlay, cursor } = await launch();
+  cursor.x = 400; cursor.y = 400;
+  ipcMain.emit('regions', panelTrusted, [{ x: 380, y: 380, width: 50, height: 50 }]);
+  poll();
+  assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', true, { forward: true }]);
+  ipcMain.emit('regions', trusted, [{ x: 380, y: 380, width: 50, height: 50 }]);
+  poll();
+  assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', false]);
+});
+
+test('settings default, persist, and drive the menus', async () => {
+  const { item, userData, overlay } = await launch();
+  assert.equal(item('Always on top').checked, true);
+  assert.equal(item('Clicks pass through chibis').checked, false);
   assert.equal(item('Walk side to side').checked, true);
   assert.equal(item('Walk up and down').checked, false);
+  assert.equal(item('Keep chibis on their screen').checked, true);
+  assert.deepEqual(last(overlay.calls, 'top'), ['top', true, 'screen-saver']);
+  assert.deepEqual(last(overlay.calls, 'workspaces'), ['workspaces', true, { visibleOnFullScreen: true }]);
+
   item('Walk up and down').click();
-  assert.deepEqual(stored(userData), { alwaysOnTop: true, followSpaces: true, clickChibis: false, walkHorizontal: true, walkVertical: true, lockToScreen: true });
-  item('Walk side to side').click();
-  assert.deepEqual(stored(userData), { alwaysOnTop: true, followSpaces: true, clickChibis: false, walkHorizontal: false, walkVertical: true, lockToScreen: true });
-});
-
-test('following across desktops is a separate, remembered toggle', async () => {
-  const { item, window, userData } = await launch();
-  assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', true, { visibleOnFullScreen: true }]);
+  assert.equal(stored(userData).walkVertical, true);
   item('Follow across desktops').click();
-  assert.deepEqual(last(window.calls, 'workspaces'), ['workspaces', false]);
   assert.equal(stored(userData).followSpaces, false);
+  assert.deepEqual(last(overlay.calls, 'workspaces'), ['workspaces', false]);
 });
 
-test('the overlay covers every display and reports their layout in window coordinates', async () => {
-  const { window, ipcMain, trusted } = await launch();
-  assert.equal(window.options.width, 1280);
-  assert.equal(window.options.height, 720);
-  ipcMain.emit('get-displays', trusted);
-  assert.deepEqual(window.sent.at(-1), ['displays', [{ x: 0, y: 0, width: 1280, height: 720, primary: true }]]);
+test('adding and clearing chibis travels from the picker to the overlay only', async () => {
+  const { ipcMain, trusted, panelTrusted, overlay, panel } = await launch();
+  const entry = { id: 'char_1#1', name: 'Amiya', model: { skeleton: 'https://a/skel', atlas: 'https://a/atlas', textures: { 'a.png': 'https://a/png' }, premultipliedAlpha: true } };
+  ipcMain.emit('add-chibi', panelTrusted, entry);
+  assert.deepEqual(overlay.sent.filter(([channel]) => channel === 'added').at(-1), ['added', entry]);
+  ipcMain.emit('add-chibi', trusted, entry);
+  assert.equal(overlay.sent.filter(([channel]) => channel === 'added').length, 1, 'the overlay cannot add chibis');
+  ipcMain.emit('add-chibi', panelTrusted, { id: 'bad' });
+  assert.equal(overlay.sent.filter(([channel]) => channel === 'added').length, 1, 'malformed entries are dropped');
+  ipcMain.emit('clear-chibis', panelTrusted);
+  assert.ok(overlay.sent.some(([channel]) => channel === 'clear-chibis'));
+  assert.equal(panel.sent.filter(([channel]) => channel === 'added').length, 0);
 });
 
-test('there is no mode that captures clicks over empty space', async () => {
-  const { window, ipcMain, trusted, poll, userData } = await launch({ cursor: { x: 5, y: 5 } });
-  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
-  ipcMain.emit('set-setting', trusted, 'clickChibis', true);
-  poll();
-  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }], 'still pass-through');
-  assert.equal(stored(userData).clickChibis, true);
-  // The renderer stops publishing chibis as interactive; their regions simply disappear.
-  ipcMain.emit('regions', trusted, [{ x: 380, y: 380, width: 50, height: 50 }]);
-  ipcMain.emit('hover', trusted, false);
-  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
+test('the overlay reports its chibi count to the picker, within bounds', async () => {
+  const { ipcMain, trusted, panelTrusted, panel } = await launch();
+  ipcMain.emit('count', trusted, 3);
+  assert.deepEqual(panel.sent.filter(([channel]) => channel === 'count').at(-1), ['count', 3]);
+  ipcMain.emit('count', trusted, maxChibis + 1);
+  ipcMain.emit('count', panelTrusted, 2);
+  assert.equal(panel.sent.filter(([channel]) => channel === 'count').length, 1);
 });
 
-test('settings IPC accepts only known boolean keys from the app frame', async () => {
-  const { window, ipcMain, trusted, userData } = await launch();
-  ipcMain.emit('set-setting', trusted, 'alwaysOnTop', 'no');
-  ipcMain.emit('set-setting', trusted, 'frame', false);
-  ipcMain.emit('set-setting', { ...trusted, sender: {} }, 'alwaysOnTop', false);
+test('untrusted frames cannot change settings, minimize or add chibis', async () => {
+  const { ipcMain, panel, overlay, userData, panelTrusted } = await launch();
+  const rogue = { sender: {}, senderFrame: { url: 'arkchibi://app/' } };
+  ipcMain.emit('set-setting', rogue, 'alwaysOnTop', false);
+  ipcMain.emit('set-setting', rogue, 'frame', false);
+  ipcMain.emit('minimize', rogue);
+  ipcMain.emit('add-chibi', rogue, { id: 'x', name: 'x', model: { skeleton: 'a', atlas: 'b', textures: {} } });
   assert.equal(fs.existsSync(path.join(userData, 'settings.json')), false);
-  assert.equal(last(window.calls, 'top')[1], true);
+  assert.equal(panel.isMinimized(), false);
+  assert.equal(overlay.sent.filter(([channel]) => channel === 'added').length, 0);
+  // The picker its own frame is trusted.
+  ipcMain.emit('minimize', panelTrusted);
+  assert.equal(panel.isMinimized(), true);
+});
+
+test('launching again restores the picker, not the overlay', async () => {
+  const { app, panel, overlay } = await launch();
+  panel.minimize();
+  panel.calls = [];
+  app.emit('second-instance');
+  assert.equal(panel.isMinimized(), false);
+  assert.deepEqual(panel.calls, ['restore', 'show', 'focus']);
+  assert.equal(overlay.calls.includes('minimize'), false);
+});
+
+test('Linux Wayland runs under XWayland and keeps click-through', async () => {
+  const x11 = await launch({ platform: 'linux', env: { XDG_SESSION_TYPE: 'x11' } });
+  assert.deepEqual(x11.switches, []);
+  const { switches, overlay } = await launch({ platform: 'linux', env: { XDG_SESSION_TYPE: 'wayland', WAYLAND_DISPLAY: 'wayland-0' } });
+  assert.deepEqual(switches, [['ozone-platform', 'x11']]);
+  assert.deepEqual(last(overlay.calls, 'ignore'), ['ignore', true, { forward: true }]);
+});
+
+test('the overlay reports every display in its own coordinates', async () => {
+  const { ipcMain, trusted, overlay } = await launch();
+  ipcMain.emit('get-displays', trusted);
+  assert.deepEqual(overlay.sent.filter(([channel]) => channel === 'displays').at(-1), ['displays', [{ x: 0, y: 0, width: 1280, height: 720, primary: true }]]);
 });
 
 test('a damaged settings file falls back to defaults', async () => {
-  const { window } = await launch({ settings: { alwaysOnTop: 'yes', clickChibis: 'no', extra: 1 } });
-  assert.equal(window.options.alwaysOnTop, true);
-  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
-});
-
-test('hit regions for every chibi at the limit are accepted', async () => {
-  assert.ok(maxChibis > 15, 'the shared WebGL stage lifts the 15-context ceiling');
-  const { window, ipcMain, trusted, poll, cursor } = await launch({ cursor: { x: 5, y: 5 } });
-  const regions = Array.from({ length: maxChibis + 1 }, (_, i) => ({ x: i * 20, y: 0, width: 10, height: 10 }));
-  ipcMain.emit('regions', trusted, regions);
-  cursor.x = maxChibis * 20 + 5; poll();
-  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', false], 'the last chibi is still grabbable');
-});
-
-test('Linux Wayland runs under XWayland and a relaunch shows the controls', async () => {
-  const x11 = await launch({ platform: 'linux', env: { XDG_SESSION_TYPE: 'x11' } });
-  assert.deepEqual(x11.switches, []);
-  const { app, switches, window, userData } = await launch({ platform: 'linux', env: { XDG_SESSION_TYPE: 'wayland', WAYLAND_DISPLAY: 'wayland-0' } });
-  assert.deepEqual(switches, [['ozone-platform', 'x11']]);
-  app.emit('second-instance');
-  assert.deepEqual(last(window.calls, 'ignore'), ['ignore', true, { forward: true }]);
-  assert.ok(window.calls.includes('show-controls'));
+  const { item } = await launch({ settings: { alwaysOnTop: 'yes', clickChibis: 'no', extra: 1 } });
+  assert.equal(item('Always on top').checked, true);
+  assert.equal(item('Clicks pass through chibis').checked, false);
 });

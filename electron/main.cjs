@@ -8,13 +8,18 @@ const support = overlaySupport(process.platform, process.env);
 if (support.preferX11 && !process.argv.some(arg => arg.startsWith('--ozone-platform'))) app.commandLine.appendSwitch('ozone-platform', 'x11');
 const { maxChibis } = require(path.join(__dirname, 'limits.json'));
 protocol.registerSchemesAsPrivileged([{ scheme: 'arkchibi', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
-// The panel or launcher, one hit box per chibi, and a little slack.
+// One hit box per chibi, plus a little slack. The picker is a separate window and never a region.
 const MAX_REGIONS = maxChibis + 4;
-let win, tray, settings, regions = [], dragging = false, hovering = false, ignored = null, timer;
+// win: the frameless, click-through overlay the chibis live in. panel: the ordinary picker window.
+let win, panel, tray, settings, regions = [], dragging = false, hovering = false, ignored = null, timer;
 app.setName('Arkpedia Chibis Dev');
-app.setPath('userData', path.join(app.getPath('appData'), 'Arkpedia Chibis Dev'));
-const trusted = e => win && e.sender === win.webContents && e.senderFrame === win.webContents.mainFrame && e.senderFrame.url.startsWith('arkchibi://app/');
+// A data directory override keeps a test or portable copy from fighting the installed one.
+app.setPath('userData', process.env.ARKPEDIA_CHIBIS_DATA || path.join(app.getPath('appData'), 'Arkpedia Chibis Dev'));
+const frameOf = w => w && !w.isDestroyed() && w.webContents && w.webContents.mainFrame;
+const fromWindow = (e, w) => !!w && !w.isDestroyed() && e.sender === w.webContents && e.senderFrame === w.webContents.mainFrame && e.senderFrame.url.startsWith('arkchibi://app/');
+const trusted = e => fromWindow(e, win) || fromWindow(e, panel);
 const alive = () => win && !win.isDestroyed();
+const panelAlive = () => panel && !panel.isDestroyed();
 // The overlay spans every display's work area, so a chibi can be dragged from one screen to
 // another. Rects travel to the renderer in window coordinates for hit tests and walking.
 const workAreas = () => screen.getAllDisplays().map(display => display.workArea);
@@ -36,18 +41,18 @@ const publishDisplays = () => {
     primary: display.id === primary,
   })));
 };
+const publishSettings = () => {
+  const value = settings.get();
+  for (const target of [win, panel]) if (frameOf(target)) target.webContents.send('settings', value);
+};
+// The picker window is the only thing that minimizes: the chibis keep walking on the desktop.
 const show = () => {
-  if (!alive()) return;
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
-  win.webContents.send('show-controls');
+  if (!panelAlive()) return;
+  if (panel.isMinimized()) panel.restore();
+  panel.show();
+  panel.focus();
 };
-const minimize = () => {
-  if (!alive()) return;
-  dragging = false;
-  win.minimize();
-};
+const minimize = () => { if (panelAlive()) panel.minimize(); };
 const setIgnore = next => {
   if (next === ignored) return;
   ignored = next;
@@ -90,10 +95,9 @@ const settingItems = () => {
 };
 // Menus are rebuilt after every change so their checkmarks match the stored settings.
 const buildMenus = () => {
-  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Show companion controls', click: show }, { label: 'Minimize companions', click: minimize }, { type: 'separator' }, ...settingItems(), { type: 'separator' }, { label: 'Quit companions', click: () => app.quit() }]));
-  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Arkpedia Chibis Dev', submenu: [{ label: 'Show controls', click: show }, { label: 'Minimize companions', accelerator: 'CommandOrControl+M', click: minimize }, { type: 'separator' }, ...settingItems(), { type: 'separator' }, { role: 'quit' }] }]));
+  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Show companion controls', click: show }, { label: 'Minimize picker', click: minimize }, { type: 'separator' }, ...settingItems(), { type: 'separator' }, { label: 'Quit companions', click: () => app.quit() }]));
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Arkpedia Chibis Dev', submenu: [{ label: 'Show controls', click: show }, { label: 'Minimize picker', accelerator: 'CommandOrControl+M', click: minimize }, { type: 'separator' }, ...settingItems(), { type: 'separator' }, { role: 'quit' }] }]));
 };
-const publishSettings = () => { if (alive()) win.webContents.send('settings', settings.get()); };
 function change(key, value) {
   if (!settings.set(key, value)) return;
   if (key === 'alwaysOnTop') applyAlwaysOnTop();
@@ -101,12 +105,25 @@ function change(key, value) {
   buildMenus();
   publishSettings();
 }
+/** The picker owns the catalogue and sends whole entries; accept only a bounded, plain shape. */
+function cleanEntry(value) {
+  if (!value || typeof value !== 'object') return null;
+  const { id, name, model } = value;
+  if (typeof id !== 'string' || !id || id.length > 200) return null;
+  if (typeof name !== 'string' || !name || name.length > 200) return null;
+  if (!model || typeof model !== 'object' || typeof model.skeleton !== 'string' || typeof model.atlas !== 'string') return null;
+  if (!model.textures || typeof model.textures !== 'object') return null;
+  const textures = {};
+  const entries = Object.entries(model.textures);
+  if (entries.length > 32) return null;
+  for (const [key, url] of entries) if (typeof url === 'string') textures[key] = url;
+  return { id, name, model: { skeleton: model.skeleton, atlas: model.atlas, textures, premultipliedAlpha: model.premultipliedAlpha === true } };
+}
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  // Launching the app again always brings the controls back. Where click-through cannot see the
-  // pointer (Linux Wayland), it also turns click-through off, or the controls could not be clicked.
+  // Launching the app again brings the picker back; the chibis were never gone.
   app.on('second-instance', () => show());
-  app.on('activate', () => { if (win && (win.isMinimized() || !win.isVisible())) show(); });
+  app.on('activate', () => { if (!panelAlive() || panel.isMinimized() || !panel.isVisible()) show(); });
   app.whenReady().then(async () => {
     settings = createSettings(path.join(app.getPath('userData'), 'settings.json'));
     const root = path.join(__dirname, '..', 'dist');
@@ -119,30 +136,42 @@ else {
     session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     session.defaultSession.setPermissionCheckHandler(() => false);
     const { alwaysOnTop } = settings.get();
-    win = new BrowserWindow({ ...unionBounds(), title: 'Arkpedia Chibis Dev', transparent: true, frame: false, resizable: false, acceptFirstMouse: true, minimizable: true, maximizable: false, fullscreenable: false, hasShadow: false, alwaysOnTop, skipTaskbar: false, backgroundColor: '#00000000', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
+    const webPreferences = { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false };
+    win = new BrowserWindow({ ...unionBounds(), title: 'Arkpedia Chibis Dev', transparent: true, frame: false, resizable: false, acceptFirstMouse: true, minimizable: false, maximizable: false, fullscreenable: false, hasShadow: false, alwaysOnTop, skipTaskbar: true, backgroundColor: '#00000000', webPreferences });
+    panel = new BrowserWindow({ width: 430, height: 780, minWidth: 360, minHeight: 480, title: 'Arkpedia Chibis', backgroundColor: '#0e1a20', show: true, webPreferences });
     applyAlwaysOnTop();
     applySpaces();
     if (process.argv.includes('--window-diagnostics')) {
       for (const event of ['minimize', 'restore', 'show', 'hide']) {
-        win.on(event, () => console.log(JSON.stringify({ event, minimized: win.isMinimized(), visible: win.isVisible() })));
+        panel.on(event, () => console.log(JSON.stringify({ event, minimized: panel.isMinimized(), visible: panel.isVisible() })));
+        win.on(event, () => console.log(JSON.stringify({ event: `overlay:${event}`, minimized: win.isMinimized(), visible: win.isVisible() })));
       }
     }
-    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    win.webContents.on('will-navigate', e => e.preventDefault());
+    for (const target of [win, panel]) {
+      target.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      target.webContents.on('will-navigate', e => e.preventDefault());
+    }
     // Windows can clamp a frameless window created larger than one monitor; re-applying the
     // bounds once the page is up makes the overlay cover every display on those systems.
     win.webContents.on('did-finish-load', () => { publishSettings(); publishDisplays(); if (alive()) win.setBounds(unionBounds()); });
+    panel.webContents.on('did-finish-load', publishSettings);
     ipcMain.on('regions', (e, value) => {
-      if (!trusted(e) || !Array.isArray(value) || value.length > MAX_REGIONS) return;
+      if (!fromWindow(e, win) || !Array.isArray(value) || value.length > MAX_REGIONS) return;
       regions = value.filter(r => r && ['x','y','width','height'].every(k => Number.isFinite(r[k])) && r.width > 0 && r.height > 0);
     });
-    ipcMain.on('dragging', (e, value) => { if (trusted(e) && typeof value === 'boolean') { dragging = value; updateMouse(() => hovering); } });
+    ipcMain.on('dragging', (e, value) => { if (fromWindow(e, win) && typeof value === 'boolean') { dragging = value; updateMouse(() => hovering); } });
     // Forwarded mousemove: the renderer reports at once when the cursor enters or leaves a chibi.
-    ipcMain.on('hover', (e, value) => { if (trusted(e) && typeof value === 'boolean') { hovering = value; updateMouse(() => value); } });
+    ipcMain.on('hover', (e, value) => { if (fromWindow(e, win) && typeof value === 'boolean') { hovering = value; updateMouse(() => value); } });
     ipcMain.on('get-settings', e => { if (trusted(e)) publishSettings(); });
-    ipcMain.on('get-displays', e => { if (trusted(e)) publishDisplays(); });
+    ipcMain.on('get-displays', e => { if (fromWindow(e, win)) publishDisplays(); });
     ipcMain.on('set-setting', (e, key, value) => { if (trusted(e) && KEYS.includes(key) && typeof value === 'boolean') change(key, value); });
-    ipcMain.on('minimize', e => { if (trusted(e)) minimize(); });
+    ipcMain.on('add-chibi', (e, value) => {
+      const entry = fromWindow(e, panel) ? cleanEntry(value) : null;
+      if (entry && alive()) win.webContents.send('added', entry);
+    });
+    ipcMain.on('clear-chibis', e => { if (fromWindow(e, panel) && alive()) win.webContents.send('clear-chibis'); });
+    ipcMain.on('count', (e, value) => { if (fromWindow(e, win) && panelAlive() && Number.isInteger(value) && value >= 0 && value <= maxChibis) panel.webContents.send('count', value); });
+    ipcMain.on('minimize', e => { if (fromWindow(e, panel)) minimize(); });
     ipcMain.on('quit', e => { if (trusted(e)) app.quit(); });
     // The cursor poll is the fallback for platforms or moments without forwarded mousemove.
     timer = setInterval(() => updateMouse(overRegion), 32);
@@ -163,8 +192,11 @@ else {
     const release = () => { dragging = false; hovering = false; updateMouse(overRegion); };
     win.on('blur', release);
     win.on('hide', release);
-    win.on('closed', () => { clearInterval(timer); app.quit(); });
-    await win.loadURL('arkchibi://app/');
+    const quit = () => { clearInterval(timer); app.quit(); };
+    win.on('closed', quit);
+    panel.on('closed', quit);
+    await win.loadURL('arkchibi://app/?role=overlay');
+    await panel.loadURL('arkchibi://app/?role=panel');
   });
 }
 app.on('window-all-closed', () => app.quit());
