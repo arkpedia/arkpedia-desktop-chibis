@@ -64,6 +64,8 @@ Renderer code runs sandboxed with context isolation and no Node integration. IPC
 
 ## Credits
 
-Arknights characters and artwork belong to their respective owners. Rendering uses the unmodified Spine Runtimes 3.8 (spine-ts WebGL); preserve `public/SPINE-LICENSE.txt` and the notices in `src/lib/vendor/spine-3.8` when redistributing. The Spine Runtimes License remains applicable.
+Arknights is developed by Hypergryph ([鹰角网络](https://www.hypergryph.com/)) and Studio Montagne. Hypergryph publishes it in mainland China, [Yostar](https://www.yostar.co.jp/) publishes the worldwide release (global, Japanese and Korean), and [Gryphline](https://www.gryphline.com/), Hypergryph's global publishing brand, publishes the Traditional Chinese server in Taiwan and other Hypergryph titles. Character names, artwork, Spine models and game data belong to Hypergryph, Yostar and their rights holders. This desktop companion is an unofficial fan project: it is not affiliated with, endorsed by or licensed by any of them, and it grants no rights to that material.
+
+Rendering uses the unmodified Spine Runtimes 3.8 (spine-ts WebGL); preserve `public/SPINE-LICENSE.txt` and the notices in `src/lib/vendor/spine-3.8` when redistributing. The Spine Runtimes License remains applicable.
 
 The app code carries no open-source licence yet (`UNLICENSED` in package.json); the owner decides before the repository is made public.
