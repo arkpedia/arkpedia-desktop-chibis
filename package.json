@@ -30,6 +30,7 @@
   "build": {
     "appId": "net.arkpedia.chibis.dev",
     "productName": "Arkpedia Chibis Dev",
+    "afterPack": "./scripts/afterPack.cjs",
     "directories": {
       "output": "releases"
     },

@@ -2,3 +2,4 @@ node_modules/
 dist/
 releases/
 .DS_Store
+.cache/

@@ -17,7 +17,7 @@ Arknights chibis walking on your desktop, for macOS, Windows and Linux. A separa
 
 Filenames never change between versions, so any of those links keeps working after a release: it always serves the newest build. Each platform also has a portable `.zip` (macOS, Windows) and a `.deb` (Linux) with the same naming, plus `SHA256SUMS.txt` on the release page.
 
-The builds are unsigned development previews: on macOS the first open needs right-click → **Open**, and Windows shows a SmartScreen "unknown publisher" warning → **More info** → **Run anyway**.
+The builds are unsigned development previews. On **macOS** the app is ad-hoc signed but not notarized, so Gatekeeper blocks the first launch: open **System Settings → Privacy & Security**, click **Open Anyway** next to *Arkpedia Chibis Dev*, and confirm. macOS 15 and later removed the old right-click → **Open** shortcut; from a terminal, `xattr -dr com.apple.quarantine "/Applications/Arkpedia Chibis Dev.app"` also works. On **Windows**, SmartScreen shows an unknown-publisher warning → **More info** → **Run anyway**.
 
 ## Using it
 
