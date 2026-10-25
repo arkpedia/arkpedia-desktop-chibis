@@ -18,7 +18,7 @@ declare global { interface Window { companion?: {
   onSettings: (callback:(value:Settings)=>void) => ()=>void; requestSettings: () => void; setSetting: (key:keyof Settings, value:boolean) => void;
   onDisplays: (callback:(value:Area[])=>void) => ()=>void; requestDisplays: () => void;
   addChibi: (entry:Entry) => void; onAdded: (callback:(entry:Entry)=>void) => ()=>void; onClear: (callback:()=>void) => ()=>void;
-  clearChibis: () => void; reportCount: (count:number) => void; onCount: (callback:(count:number)=>void) => ()=>void;
+  clearChibis: () => void; reportCount: (count:number) => void; onCount: (callback:(count:number)=>void) => ()=>void; requestCount: () => void;
   saveChibis: (ids:string[]) => void; getChibis: () => void; onChibis: (callback:(ids:string[])=>void) => ()=>void;
 } } }
 /** One shared WebGL stage draws every chibi, so this is a comfort limit, not a context limit. */
@@ -199,7 +199,7 @@ function Overlay(){
 function Panel(){
   const [query,setQuery]=useState(''),[settings,setSettings]=useState<Settings|null>(null),[count,setCount]=useState(0),[view,setView]=useState<'list'|'settings'>('list');
   useEffect(()=>{const off=window.companion?.onSettings(setSettings);window.companion?.requestSettings();return off;},[]);
-  useEffect(()=>{const off=window.companion?.onCount(setCount);return off;},[]);
+  useEffect(()=>{const off=window.companion?.onCount(setCount);window.companion?.requestCount();return off;},[]);
   const entries=catalogue as unknown as Entry[];
   const matches=entries.filter(row=>row.name.toLowerCase().includes(query.toLowerCase())).slice(0,60);
   const full=count>=MAX_CHIBIS;

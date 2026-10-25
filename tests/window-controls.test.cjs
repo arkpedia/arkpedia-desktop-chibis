@@ -156,6 +156,32 @@ test('the overlay reports its chibi count to the picker, within bounds', async (
   assert.equal(panel.sent.filter(([channel]) => channel === 'count').length, 1);
 });
 
+test('the picker can request the restored count after missing the startup report', async () => {
+  const first = await launch();
+  first.ipcMain.emit('chibis-changed', first.trusted, ['char_1#1', 'char_2#1']);
+  const { ipcMain, trusted, panelTrusted, panel } = await launch({ userData: first.userData });
+  ipcMain.emit('get-count', panelTrusted);
+  assert.deepEqual(last(panel.sent, 'count'), ['count', 0]);
+  ipcMain.emit('get-chibis', trusted);
+  ipcMain.emit('count', trusted, 2);
+  // Startup reports precede the picker subscription; a reload loses them too.
+  panel.sent.length = 0;
+  ipcMain.emit('get-count', panelTrusted);
+  assert.deepEqual(panel.sent, [['count', 2]]);
+  for (const invalid of [-1, maxChibis + 1, 1.5, '3', NaN]) ipcMain.emit('count', trusted, invalid);
+  ipcMain.emit('count', panelTrusted, 9);
+  ipcMain.emit('get-count', panelTrusted);
+  assert.deepEqual(last(panel.sent, 'count'), ['count', 2]);
+  panel.sent.length = 0;
+  ipcMain.emit('get-count', trusted);
+  ipcMain.emit('get-count', { sender: {}, senderFrame: { url: 'arkchibi://app/' } });
+  assert.deepEqual(panel.sent, []);
+  ipcMain.emit('count', trusted, 0);
+  panel.sent.length = 0;
+  ipcMain.emit('get-count', panelTrusted);
+  assert.deepEqual(panel.sent, [['count', 0]], 'clearing updates the retained count');
+});
+
 test('untrusted frames cannot change settings, minimize or add chibis', async () => {
   const { ipcMain, panel, overlay, userData, panelTrusted } = await launch();
   const rogue = { sender: {}, senderFrame: { url: 'arkchibi://app/' } };
