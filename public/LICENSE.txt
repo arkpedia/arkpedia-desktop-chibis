@@ -1,0 +1,18 @@
+Arkpedia original application code
+Copyright (c) 2026 Arkpedia contributors. All rights reserved.
+
+Official Arkpedia Chibis builds are provided free of charge for personal,
+noncommercial use. You may download, install and run those builds for that
+purpose. No open-source license or other permission to modify, redistribute,
+sublicense or commercially exploit the original application code is granted.
+Public availability of the source code does not grant those permissions.
+
+This notice applies only to original Arkpedia application code. Third-party
+software remains subject to its own licenses in THIRD-PARTY-NOTICES.txt and
+the notices accompanying Electron. Arknights names, characters, artwork,
+models, animations and other game assets are excluded. Arkpedia grants no
+rights to that material. See NOTICE for ownership and provenance.
+
+The application is provided "as is", without warranties of any kind, to the
+extent permitted by applicable law. Nothing here excludes rights or liability
+that cannot lawfully be excluded.

@@ -2,6 +2,8 @@
 
 Arknights chibis walking on your desktop, for macOS, Windows and Linux. A separate app: no account import, website storage, login, auto-start or automatic updater.
 
+**Unofficial, noncommercial fan project, made for fun.** Free to use, with no paid features. Not affiliated with or endorsed by Hypergryph, Yostar or other Arknights rights holders. Game assets remain their owners' property; this project grants no rights to them. See [ownership and credits](NOTICE) and [application licensing](LICENSE).
+
 ## Download
 
 **[Download the latest release →](https://github.com/arkpedia/arkpedia-desktop-chibis/releases/latest)** Pick your platform and click the file. No account needed.
@@ -93,6 +95,10 @@ Renderer code runs sandboxed with context isolation and no Node integration. IPC
 
 Arknights is developed by Hypergryph ([鹰角网络](https://www.hypergryph.com/)) and Studio Montagne. Hypergryph publishes it in mainland China, [Yostar](https://www.yostar.co.jp/) publishes the worldwide release (global, Japanese and Korean), and [Gryphline](https://www.gryphline.com/), Hypergryph's global publishing brand, publishes the Traditional Chinese server in Taiwan and other Hypergryph titles. Character names, artwork, Spine models and game data belong to Hypergryph, Yostar and their rights holders. This desktop companion is an unofficial fan project: it is not affiliated with, endorsed by or licensed by any of them, and it grants no rights to that material.
 
-Rendering uses the unmodified Spine Runtimes 3.8 (spine-ts WebGL); preserve `public/SPINE-LICENSE.txt` and the notices in `src/lib/vendor/spine-3.8` when redistributing. The Spine Runtimes License remains applicable.
+Rendering uses Spine Runtimes 3.8 (spine-ts WebGL), with the ES module adaptation documented in [the vendor notes](src/lib/vendor/spine-3.8/README.md). The original runtime license is preserved in `public/SPINE-LICENSE.txt`. React, Electron and their runtime dependencies retain their separate licenses.
 
-The app code is all rights reserved for now (`UNLICENSED` in package.json): this repository being public lets people read and download it, but grants no licence to reuse it. A licence will be chosen separately.
+The original app code remains all rights reserved (`UNLICENSED` in package.json); [LICENSE](LICENSE) permits personal, noncommercial use of official builds and does not grant an open-source license. This restriction does not override third-party software licenses or apply to game assets.
+
+**Settings → About & credits** shows ownership and software license notices inside the app. `npm run build` regenerates `public/LICENSE.txt`, `public/NOTICE.txt` and [third-party notices](public/THIRD-PARTY-NOTICES.txt) from the source notices and installed dependencies; Vite copies them into `dist/`, which is packaged with the app. Keep Electron's accompanying license files as well. These notices document ownership and license terms; they do not establish permission from game rights holders.
+
+Rights concerns or correction/removal requests can be reported through [repository issues](https://github.com/arkpedia/arkpedia-desktop-chibis/issues).
