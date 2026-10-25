@@ -1,9 +1,14 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, screen, protocol, net, session } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, screen, protocol, net, session, dialog, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 // Absolute paths: the tests run this file in a vm whose require resolves from tests/.
-const { KEYS, createSettings, topLevel, shouldIgnoreMouse, overlaySupport } = require(path.join(__dirname, 'settings.cjs'));
+const { validSetting, createSettings, topLevel, shouldIgnoreMouse, overlaySupport } = require(path.join(__dirname, 'settings.cjs'));
+const { setLogin, getLogin, loginSupported } = require(path.join(__dirname, 'login.cjs'));
+const { createLibrary } = require(path.join(__dirname, 'library.cjs'));
+const { createUpdates } = require(path.join(__dirname, 'updates.cjs'));
+const { createSurfaces } = require(path.join(__dirname, 'surfaces.cjs'));
+const catalogue = require(path.join(__dirname, '..', 'src', 'catalogue.json'));
 const support = overlaySupport(process.platform, process.env);
 // Wayland gives clients no always-on-top; XWayland does on most compositors. Must precede ready.
 if (support.preferX11 && !process.argv.some(arg => arg.startsWith('--ozone-platform'))) app.commandLine.appendSwitch('ozone-platform', 'x11');
@@ -15,6 +20,9 @@ const MAX_REGIONS = maxChibis + 4;
 let win, panel, tray, settings, regions = [], dragging = false, hovering = false, ignored = null, timer;
 // The overlay can restore before the picker subscribes to count updates.
 let chibiCount = 0;
+let library, libraryReady, updates, serviceError;
+let surfaces, surfaceRows=[];
+const sendPanel = (channel, value) => { if (panelAlive()) panel.webContents.send(channel, value); };
 app.setName('Arkpedia Chibis Dev');
 // A data directory override keeps a test or portable copy from fighting the installed one.
 app.setPath('userData', process.env.ARKPEDIA_CHIBIS_DATA || path.join(app.getPath('appData'), 'Arkpedia Chibis Dev'));
@@ -118,11 +126,21 @@ const buildMenus = () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'Arkpedia Chibis Dev', submenu: [{ label: 'Show controls', click: show }, { label: 'Minimize picker', accelerator: 'CommandOrControl+M', click: minimize }, { type: 'separator' }, ...settingItems(), { type: 'separator' }, { role: 'quit' }] }]));
 };
 function change(key, value) {
+  if(key==='windowEdges'&&value&&process.platform!=='win32'){serviceError='Window-edge detection is currently available on Windows. Gravity works on all platforms.';publishServices();return;}
+  if (key === 'launchAtLogin') {
+    try { setLogin(app,value,process.platform,process.env); serviceError=undefined; }
+    catch(error) { serviceError=error.message; publishServices(); return; }
+  }
   if (!settings.set(key, value)) return;
   if (key === 'alwaysOnTop') applyAlwaysOnTop();
   if (key === 'followSpaces') applySpaces();
+  if (key === 'windowEdges'||key==='gravity') { if(settings.get().windowEdges&&settings.get().gravity)surfaces.start();else surfaces.stop(); }
   buildMenus();
   publishSettings();
+  publishServices();
+}
+function publishServices() {
+  sendPanel('services',{loginSupported:loginSupported(app,process.platform,process.env),windowEdgesSupported:process.platform==='win32',error:serviceError});
 }
 /** The picker owns the catalogue and sends whole entries; accept only a bounded, plain shape. */
 function cleanEntry(value) {
@@ -145,9 +163,23 @@ else {
   app.on('activate', () => { if (!panelAlive() || panel.isMinimized() || !panel.isVisible()) show(); });
   app.whenReady().then(async () => {
     settings = createSettings(path.join(app.getPath('userData'), 'settings.json'));
+    try{settings.set('launchAtLogin',getLogin(app,process.platform,process.env));}catch{serviceError='Could not read the system login-item setting.';}
+    library = createLibrary({directory:path.join(app.getPath('userData'),'library'),catalogue,extras:require(path.join(__dirname,'furniture-assets.json')),fetch:(...args)=>net.fetch(...args),changed:value=>{
+      sendPanel('library',value);
+      if(frameOf(win))win.webContents.send('library',value);
+    }});
+    libraryReady=library.init().catch(()=>{serviceError='Could not open the model library.';});
+    updates=createUpdates({app,net,shell,windowsInstalled:process.platform==='win32'&&!!process.execPath&&fs.existsSync(path.join(path.dirname(process.execPath),'Uninstall Arkpedia Chibis Dev.exe')),makeUpdater:()=>require('electron-updater').autoUpdater,changed:value=>sendPanel('updates',value)});
+    surfaces=createSurfaces({screen,changed:rows=>{
+      if(!alive())return;const origin=win.getBounds();surfaceRows=rows.map(r=>({...r,x:r.x-origin.x,y:r.y-origin.y}));win.webContents.send('surfaces',surfaceRows);
+    },failed:()=>{serviceError='Window-edge detection could not start. Check PowerShell availability and script policy. Gravity still works.';surfaceRows=[];if(frameOf(win))win.webContents.send('surfaces',[]);publishServices();}});
+    app.on('before-quit',()=>surfaces.stop());
     const root = path.join(__dirname, '..', 'dist');
     protocol.handle('arkchibi', req => {
       const url = new URL(req.url);
+      if(url.host==='app'&&url.pathname.startsWith('/assets/')) {
+        return libraryReady.then(()=>library.response(decodeURIComponent(url.pathname.slice('/assets/'.length))));
+      }
       const file = path.resolve(root, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
       if (url.host !== 'app' || !file.startsWith(root + path.sep)) return new Response('Not found', { status: 404 });
       return net.fetch(pathToFileURL(file).toString());
@@ -183,13 +215,29 @@ else {
     ipcMain.on('hover', (e, value) => { if (fromWindow(e, win) && typeof value === 'boolean') { hovering = value; updateMouse(() => value); } });
     ipcMain.on('get-settings', e => { if (trusted(e)) publishSettings(); });
     ipcMain.on('get-displays', e => { if (fromWindow(e, win)) publishDisplays(); });
+    ipcMain.on('get-surfaces',e=>{if(fromWindow(e,win))win.webContents.send('surfaces',surfaceRows);});
     ipcMain.on('get-chibis', e => { if (fromWindow(e, win)) win.webContents.send('chibis', settings.get().rememberChibis ? readChibis() : []); });
+    ipcMain.on('get-services',e=>{if(fromWindow(e,panel))publishServices();});
+    const runLibrary=async action=>{try{await libraryReady;await action();}catch{serviceError='The model library could not complete that operation. Check disk space and permissions.';publishServices();}};
+    ipcMain.on('get-library',async e=>{if(trusted(e)){await libraryReady;if(trusted(e))e.sender.send('library',library.get());}});
+    ipcMain.on('library-download',(e,ids)=>{if(fromWindow(e,panel))void runLibrary(()=>library.download(ids));});
+    ipcMain.on('library-clear',e=>{if(fromWindow(e,panel))void runLibrary(()=>library.clear());});
+    ipcMain.on('library-remove',(e,id)=>{if(fromWindow(e,panel))void runLibrary(()=>library.removePack(id));});
+    for(const action of ['import','export'])ipcMain.on(`library-${action}`,e=>{void runLibrary(async()=>{
+      if(!fromWindow(e,panel))return;
+      await libraryReady;
+      const selected=await dialog.showOpenDialog(panel,{title:action==='import'?'Import model pack (folder with manifest.json)':'Export downloaded models to folder',properties:['openDirectory']});
+      if(selected.canceled||!selected.filePaths[0]||!fromWindow(e,panel))return;
+      if(action==='import')await library.importPack(selected.filePaths[0]);else await library.exportPack(selected.filePaths[0]);
+    });});
+    ipcMain.on('get-updates',e=>{if(fromWindow(e,panel))sendPanel('updates',updates.get());});
+    ipcMain.on('update-action',(e,action)=>{if(!fromWindow(e,panel))return;if(action==='check')void updates.check();if(action==='download')void updates.download();if(action==='install')updates.install();if(action==='open')void updates.open();});
     ipcMain.on('chibis-changed', (e, ids) => {
       if (!fromWindow(e, win) || !Array.isArray(ids)) return;
       const clean = ids.filter(id => typeof id === 'string' && id.length <= 200).slice(0, maxChibis);
       if (settings.get().rememberChibis) writeChibis(clean);
     });
-    ipcMain.on('set-setting', (e, key, value) => { if (trusted(e) && KEYS.includes(key) && typeof value === 'boolean') change(key, value); });
+    ipcMain.on('set-setting', (e, key, value) => { if (trusted(e) && validSetting(key,value)) change(key, value); });
     ipcMain.on('add-chibi', (e, value) => {
       const entry = fromWindow(e, panel) ? cleanEntry(value) : null;
       if (entry && alive()) win.webContents.send('added', entry);
@@ -222,11 +270,12 @@ else {
     const release = () => { dragging = false; hovering = false; updateMouse(overRegion); };
     win.on('blur', release);
     win.on('hide', release);
-    const quit = () => { clearInterval(timer); app.quit(); };
+    const quit = () => { clearInterval(timer); if(updates.get().status!=='installing')app.quit(); };
     win.on('closed', quit);
     panel.on('closed', quit);
     await win.loadURL('arkchibi://app/?role=overlay');
     await panel.loadURL('arkchibi://app/?role=panel');
+    if(settings.get().windowEdges&&settings.get().gravity&&process.platform==='win32')surfaces.start();
   });
 }
 app.on('window-all-closed', () => app.quit());

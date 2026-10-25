@@ -1,6 +1,6 @@
 # Arkpedia Chibis — desktop companion
 
-Arknights chibis walking on your desktop, for macOS, Windows and Linux. A separate app: no account import, website storage, login, auto-start or automatic updater.
+Arknights chibis walking on your desktop, for macOS, Windows and Linux. A separate app with optional launch at login, an offline model library, and user-controlled updates. No game account import or login is required.
 
 **Unofficial, noncommercial fan project, made for fun.** Free to use, with no paid features. Not affiliated with or endorsed by Hypergryph, Yostar or other Arknights rights holders. Game assets remain their owners' property; this project grants no rights to them. See [ownership and credits](NOTICE) and [application licensing](LICENSE).
 
@@ -33,6 +33,10 @@ Resting chibis use the same two pieces of furniture as the website: the **Black 
 
 ## Overlay modes
 
+Settings also includes **15 / 30 / 60 FPS** limits, **Launch at login** (off by default), model-library management, and **Check for updates**. The frame limit applies to both rendering and companion movement calculations. Catalogue filters include model type, outfit brand, multiple search words, and downloaded-only models; the filters are remembered. Select up to 32 models using the catalogue checkboxes, then open **Library** to download them and their furniture assets.
+
+The library stores immutable models in the app's user-data directory, with a 1 GB limit and a 64 MB per-file limit. Loading a model also caches it; explicit downloads include both pieces of furniture and their masks. Import/export and clear-cache actions are available in Settings. See [model packs and platform support](docs/desktop-features.md).
+
 Clicks on empty space always go to the apps below; the overlay only takes the mouse back over a chibi, the picker or the launcher. The remaining options are remembered between launches (`settings.json` in the app's user-data folder) and can be changed from the picker's **Settings** (the gear button), the tray / menu-bar menu, and the app menu. The tray menu also has **Quit companions**.
 
 - **Always on top** (default on): the overlay stays above every window. Off: it is an ordinary window that other windows can cover; bring it back from the taskbar/Dock or the tray.
@@ -51,6 +55,8 @@ On Linux a compositing window manager is needed for transparency. Without a tray
 ## Walking and screens
 
 Chibis wander left and right by default. **Settings** (gear) → **Walking**, the tray menu and the app menu add **up and down**; with both on a chibi picks a point anywhere and walks there in a straight line, so it moves diagonally without speeding up. Both off leaves them standing where they are. The axes are remembered between launches.
+
+**Gravity** is optional and replaces vertical wandering while enabled. Dropping a companion lets it fall to its display's floor. On Windows, enable **Stand on window edges** to land on visible top edges of other windows; moving or closing a supporting window lets the companion fall again. Other platforms currently support floor gravity only. This feature reads window geometry locally, not window titles, screenshots, or contents.
 
 The overlay covers every display's work area, so you can drag a chibi from one screen to another. **Stay on one screen** (default on) keeps each chibi walking within the screen it is currently on; turn it off and a chibi may wander onto another display. Dragging works either way, so the lock only constrains walking.
 
@@ -85,7 +91,7 @@ npm run package:linux   # AppImage + deb, x64 + arm64 (on Linux)
 
 `.github/workflows/ci.yml` runs tests and the build on macOS, Windows and Ubuntu for every pull request. `.github/workflows/release.yml` packages all three on a `v*` tag and attaches them, with `SHA256SUMS.txt`, to a GitHub Release.
 
-Renderer code runs sandboxed with context isolation and no Node integration. IPC accepts only bounded hit regions, drag/hover state, the two boolean settings, minimize and quit requests from the local main frame. Remote navigation, new windows and permission requests are denied. Only pinned HTTPS artwork is fetched; the application JavaScript is bundled locally.
+Renderer code runs sandboxed with context isolation and no Node integration. IPC validates preferences, bounded hit regions, drag/hover state, and library/update commands from the appropriate local main frame. Remote navigation, new windows and renderer permission requests are denied. Artwork downloads are restricted to the pinned catalogue; imported model files are validated and served through the local protocol. The application JavaScript is bundled locally.
 
 ## Artwork and catalogue
 

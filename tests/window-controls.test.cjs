@@ -244,3 +244,14 @@ test('a damaged settings file falls back to defaults', async () => {
   assert.equal(item('Always on top').checked, true);
   assert.equal(item('Clicks pass through chibis').checked, false);
 });
+
+test('the picker alone can request updates, library changes and desktop services',async()=>{
+  const {ipcMain,trusted,panelTrusted,panel,overlay}=await launch();
+  ipcMain.emit('get-updates',trusted);ipcMain.emit('get-services',trusted);
+  assert.equal(panel.sent.some(([channel])=>channel==='updates'||channel==='services'),false);
+  ipcMain.emit('get-updates',panelTrusted);ipcMain.emit('get-services',panelTrusted);
+  assert.equal(last(panel.sent,'updates')[1].status,'idle');assert.equal(last(panel.sent,'services')[1].loginSupported,false);
+  ipcMain.emit('get-surfaces',panelTrusted);assert.equal(overlay.sent.some(([channel])=>channel==='surfaces'),false);
+  ipcMain.emit('get-surfaces',trusted);assert.deepEqual(last(overlay.sent,'surfaces'),['surfaces',[]]);
+  for(const channel of ['library-import','library-export','library-clear','library-download','update-action'])ipcMain.emit(channel,trusted,'install');
+});
