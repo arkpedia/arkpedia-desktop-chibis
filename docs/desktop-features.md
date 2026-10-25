@@ -87,9 +87,23 @@ supported. Imported models use the same animation selection and size controls
 as existing companions; models with no walk animation remain in their idle
 animation while moving.
 
-The built-in catalogue still contains operator chibis and outfits. Imported
-enemy/illustration models are supported now; curated built-in enemy and animated
-illustration catalogues remain a later expansion, as requested.
+The built-in catalogue includes operators, outfits and **189 enemy models** already
+published in the SD asset repository. Select **Enemies** in the model-type filter.
+The enemy resources are pinned to SD commit `6f3cfd431aeb1475e7654cb9c019e176b238c01a`.
+Their original manifest hashes, source revisions, animation names and name-table
+hashes are recorded in `src/enemy-catalogue-source.json`. All files were hash-checked
+and all animation tracks parsed/applied with the bundled Spine runtime before import.
+187 display names match exact IDs in the website data; two retain their source IDs.
+Thirteen models have no native movement track and retain their idle pose while moving.
+This is the existing SD enemy inventory, not the complete game's enemy roster. Its
+source is Ark-Models; no new direct-client extraction was needed for these files.
+Built-in animated illustrations remain a later expansion.
+
+To reproduce the enemy catalogue against that immutable manifest and asset checkout:
+
+```sh
+node scripts/sync-enemy-catalogue.mjs manifest.json <SD-commit> /path/to/SD /path/to/arkpedia/data
+```
 
 ## Catalogue metadata
 

@@ -2,6 +2,7 @@
 
 Release notes for Arkpedia Chibis, newest first:
 
+- [0.7.0](RELEASE-0.7.0.md)
 - [0.6.1](RELEASE-0.6.1.md)
 - [0.6.0](RELEASE-0.6.0.md)
 - [0.5.0](RELEASE-0.5.0.md)

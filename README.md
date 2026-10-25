@@ -2,6 +2,8 @@
 
 Arknights chibis walking on your desktop, for macOS, Windows and Linux. A separate app with optional launch at login, an offline model library, and user-controlled updates. No game account import or login is required.
 
+Includes operator chibis, outfits and **189 enemy models**. Choose **Enemies** in the model-type filter. Compatible Spine 3.8 model packs can also be imported.
+
 **Unofficial, noncommercial fan project, made for fun.** Free to use, with no paid features. Not affiliated with or endorsed by Hypergryph, Yostar or other Arknights rights holders. Game assets remain their owners' property; this project grants no rights to them. See [ownership and credits](NOTICE) and [application licensing](LICENSE).
 
 ## Download

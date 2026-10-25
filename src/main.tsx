@@ -270,7 +270,7 @@ function Panel(){
           <Credits/>
         </section>
       : <>
-          <input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
+          <input aria-label="Search chibis" placeholder="Search operator, outfit or enemy…" value={query} onChange={e=>setQuery(e.target.value)} />
           <div className="filters">
             <select aria-label="Model type" value={kind} onChange={e=>setKind(e.target.value)}><option value="all">All models</option><option value="operator">Operators</option><option value="outfit">Outfits</option><option value="enemy">Enemies</option><option value="illustration">Illustrations</option></select>
             <select aria-label="Outfit brand" value={brand} onChange={e=>setBrand(e.target.value)}><option value="">All outfit brands</option>{brands.map(name=><option key={name}>{name}</option>)}</select>

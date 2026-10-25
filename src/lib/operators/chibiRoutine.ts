@@ -17,7 +17,9 @@ export function chibiActivities(animations: readonly ChibiAnimation[]) {
 export function chibiIdleAnimation(animations: readonly ChibiAnimation[]): string | undefined {
   const idle = chibiActivities(animations).idle;
   return (idle.find(pose => /^idle$/i.test(pose.name))
-    ?? idle.find(pose => /^relax$/i.test(pose.name)) ?? idle[0])?.name;
+    ?? idle.find(pose => /^relax$/i.test(pose.name)) ?? idle[0]
+    // Some enemy skeletons prefix their native tracks with a form/facing letter.
+    ?? animations.find(pose => /^(?:[a-z]_)?idle(?:[_\d].*)?$/i.test(pose.name)))?.name;
 }
 
 /** Native base models use Interact for a tap and Special for an outfit's trust reaction.
