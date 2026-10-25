@@ -7,9 +7,9 @@ import type { ChibiModel } from './lib/operators/chibi';
 import { chibiActivities, chooseChibiTap } from './lib/operators/chibiRoutine';
 import { FURNITURE, furnitureBox } from './lib/operators/furniture';
 import './style.css';
-import ownershipNotice from '../public/NOTICE.txt?raw';
-import appLicense from '../public/LICENSE.txt?raw';
-import thirdPartyNotices from '../public/THIRD-PARTY-NOTICES.txt?raw';
+import ownershipNotice from '../NOTICE?raw';
+import appLicense from '../LICENSE?raw';
+import thirdPartyNotices from '../THIRD-PARTY-NOTICES.txt?raw';
 
 type Region = { x:number; y:number; width:number; height:number };
 type Settings = { alwaysOnTop:boolean; followSpaces:boolean; clickChibis:boolean; walkHorizontal:boolean; walkVertical:boolean; lockToScreen:boolean; rememberChibis:boolean };

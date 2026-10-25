@@ -16,6 +16,7 @@ for (const name of ['electron', 'react', 'react-dom', 'scheduler', 'loose-envify
   const pkg = JSON.parse(read(`${directory}/package.json`));
   sections.push(`${name} ${pkg.version}\n\n${read(`${directory}/LICENSE`)}`);
 }
-fs.writeFileSync(path.join(root, 'public', 'THIRD-PARTY-NOTICES.txt'), sections.join('\n\n' + '='.repeat(72) + '\n\n').trimEnd() + '\n');
+fs.writeFileSync(path.join(root, 'THIRD-PARTY-NOTICES.txt'), sections.join('\n\n' + '='.repeat(72) + '\n\n').trimEnd() + '\n');
+fs.copyFileSync(path.join(root, 'THIRD-PARTY-NOTICES.txt'), path.join(root, 'public/THIRD-PARTY-NOTICES.txt'));
 // Keep the standalone notice identical to the license shipped with the vendor code.
 fs.copyFileSync(path.join(root, 'src/lib/vendor/spine-3.8/LICENSE'), path.join(root, 'public/SPINE-LICENSE.txt'));
