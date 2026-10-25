@@ -22,6 +22,14 @@ body.role-panel .choices{flex:1;max-height:none}
 .credits summary:focus-visible{outline:2px solid #58dbca;outline-offset:3px}
 .credits pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.6 system-ui,sans-serif;color:#aabdc3;user-select:text}
 footer{flex-wrap:wrap}
+select{font:inherit;min-width:0;max-width:100%;padding:7px;border:1px solid #486068;border-radius:6px;background:#101b22;color:inherit}
+.filters{display:flex;flex-wrap:wrap;gap:8px}.filters select{flex:1}.filters label{display:flex;align-items:center;gap:6px;font-size:12px}.filters input,.choice-row>input{width:auto}
+.choice-row{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px}.choice-row small{display:block;letter-spacing:0;font-size:10px}
+.tool-actions{display:flex;flex-wrap:wrap;gap:6px}.tool-actions button{font-size:12px;padding:7px}
+.library-shortcut{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#aabdc3;font-size:12px}.library-shortcut button{padding:5px 8px;font-size:12px}
+.modes select{margin-left:auto}.modes progress{width:100%}
+.pet.gravity .pet-controls{bottom:14.286%}
+.modes{min-width:0}.modes label>span{min-width:0;flex:1}.modes select{flex-shrink:1;max-width:52%}
 
 /* Furniture sits behind the chibi canvas, so the chibi is drawn on top of it. */
 .furniture{position:fixed;z-index:1;pointer-events:none;user-select:none;mask-size:100% 100%;mask-repeat:no-repeat;-webkit-mask-size:100% 100%;-webkit-mask-repeat:no-repeat}

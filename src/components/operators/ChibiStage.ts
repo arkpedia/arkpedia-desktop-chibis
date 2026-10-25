@@ -5,6 +5,8 @@ import { chibiIdleAnimation } from '@/lib/operators/chibiRoutine';
 import { chibiClip, chibiPlacement, finiteBounds } from '@/lib/operators/chibiFraming';
 import type { ChibiBounds } from '@/lib/operators/chibiFraming';
 import { premultipliedTexture } from '@/lib/spine/premultipliedTexture';
+import { frameDue } from '@/lib/operators/desktopMotion';
+import { assetUrl } from '@/lib/operators/library';
 
 type Runtime = typeof Spine;
 type Context = InstanceType<Runtime['webgl']['ManagedWebGLRenderingContext']>;
@@ -36,6 +38,7 @@ export class ChibiStage {
   private readonly models = new Map<string, Entry>();
   private frame = 0;
   private previous = performance.now();
+  private fps = 60;
   private blank = false;
   private stopped = false;
   private readonly started: Promise<void>;
@@ -53,6 +56,8 @@ export class ChibiStage {
   }
 
   /** Registers a chibi; returns its removal function. */
+  setFrameRate(fps:number) { this.fps = [15,30,60].includes(fps) ? fps : 60; }
+
   add(model: ChibiModel, hooks: ChibiActorHooks): () => void {
     const actor: Actor = { hooks, clip: '', sequence: -1, loop: true };
     const key = `${model.skeleton}\n${model.atlas}`;
@@ -114,11 +119,11 @@ export class ChibiStage {
 
   private async load(model: ChibiModel): Promise<Shared> {
     const [skeletonBytes, atlasText, images] = await Promise.all([
-      fetch(model.skeleton).then(res => { if (!res.ok) throw Error('Skeleton unavailable'); return res.arrayBuffer(); }),
-      fetch(model.atlas).then(res => { if (!res.ok) throw Error('Atlas unavailable'); return res.text(); }),
+      fetch(assetUrl(model.skeleton)).then(res => { if (!res.ok) throw Error('Skeleton unavailable'); return res.arrayBuffer(); }),
+      fetch(assetUrl(model.atlas)).then(res => { if (!res.ok) throw Error('Atlas unavailable'); return res.text(); }),
       Promise.all(Object.entries(model.textures).map(([name, url]) => new Promise<[string, HTMLImageElement]>((resolve, reject) => {
         const image = new Image(); image.crossOrigin = 'anonymous';
-        image.onload = () => resolve([name, image]); image.onerror = () => reject(Error('Texture unavailable')); image.src = url;
+        image.onload = () => resolve([name, image]); image.onerror = () => reject(Error('Texture unavailable')); image.src = assetUrl(url);
       }))),
       this.started,
     ]);
@@ -130,7 +135,9 @@ export class ChibiStage {
       return premultipliedTexture(spine, context, image, model.premultipliedAlpha);
     });
     try {
-      const data = new spine.SkeletonBinary(new spine.AtlasAttachmentLoader(atlas)).readSkeletonData(new Uint8Array(skeletonBytes));
+      const bytes=new Uint8Array(skeletonBytes), text=new TextDecoder().decode(bytes.slice(0,64)).trimStart();
+      const loader=new spine.AtlasAttachmentLoader(atlas);
+      const data = text.startsWith('{') ? new spine.SkeletonJson(loader).readSkeletonData(JSON.parse(new TextDecoder().decode(bytes))) : new spine.SkeletonBinary(loader).readSkeletonData(bytes);
       const stateData = new spine.AnimationStateData(data); stateData.defaultMix = .15;
       const names = data.animations.map(value => value.name);
       const idle = chibiIdleAnimation(data.animations) ?? (names.includes('Idle') ? 'Idle' : names[0]);
@@ -142,8 +149,9 @@ export class ChibiStage {
   private readonly render = (now: number) => {
     if (this.stopped) return;
     this.frame = requestAnimationFrame(this.render);
+    if (!frameDue(now, this.previous, this.fps)) return;
     const renderer = this.renderer!, gl = this.context!.gl, canvas = this.canvas;
-    const dt = Math.min(.05, (now - this.previous) / 1000); this.previous = now;
+    const dt = Math.min(.1, (now - this.previous) / 1000); this.previous = now;
     const drawable = [...this.actors].filter(actor => actor.skeleton);
     // Nothing to draw: clear once, then leave the GPU idle.
     if (!drawable.length && this.blank) return;

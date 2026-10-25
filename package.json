@@ -15,28 +15,31 @@
     "package:linux": "npm run build && electron-builder --linux AppImage deb --x64 --arm64 --publish never"
   },
   "dependencies": {
+    "electron-updater": "6.8.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "electron": "44.7.0",
-    "electron-builder": "26.15.3",
-    "vite": "8.3.4",
-    "typescript": "^5.9.3",
+    "@types/node": "^24.0.0",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
-    "@types/node": "^24.0.0"
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "typescript": "^5.9.3",
+    "vite": "8.3.4"
   },
   "build": {
     "appId": "net.arkpedia.chibis.dev",
     "productName": "Arkpedia Chibis Dev",
     "afterPack": "./scripts/afterPack.cjs",
+    "asarUnpack": ["electron/helpers/**"],
     "directories": {
       "output": "releases"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "src/catalogue.json",
       "package.json"
     ],
     "mac": {
@@ -55,6 +58,7 @@
       ]
     },
     "artifactName": "Arkpedia-Chibis-Dev-${os}-${arch}.${ext}",
+    "publish": [{"provider":"github","owner":"arkpedia","repo":"arkpedia-desktop-chibis","releaseType":"release"}],
     "nsis": {
       "oneClick": false,
       "perMachine": false,

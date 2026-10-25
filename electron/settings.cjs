@@ -1,14 +1,15 @@
-// Remembered overlay modes and walking axes. Only known boolean keys survive a read, so a
+// Remembered preferences. Only known keys with validated values survive a read, so a
 // damaged or hand-edited file can never put the window in an unknown state.
 const fs = require('node:fs');
 const path = require('node:path');
 
-const DEFAULTS = Object.freeze({ alwaysOnTop: true, followSpaces: true, clickChibis: false, walkHorizontal: true, walkVertical: false, lockToScreen: true, rememberChibis: true });
+const DEFAULTS = Object.freeze({ alwaysOnTop: true, followSpaces: true, clickChibis: false, walkHorizontal: true, walkVertical: false, lockToScreen: true, rememberChibis: true, fpsLimit: 60, launchAtLogin: false, gravity: false, windowEdges: false });
 const KEYS = Object.keys(DEFAULTS);
+const validSetting = (key, value) => KEYS.includes(key) && (key === 'fpsLimit' ? [15, 30, 60].includes(value) : typeof value === 'boolean');
 
 function normalize(value) {
   const result = { ...DEFAULTS };
-  if (value && typeof value === 'object') for (const key of KEYS) if (typeof value[key] === 'boolean') result[key] = value[key];
+  if (value && typeof value === 'object') for (const key of KEYS) if (validSetting(key, value[key])) result[key] = value[key];
   return result;
 }
 
@@ -28,7 +29,7 @@ function createSettings(file) {
     get: () => ({ ...current }),
     /** Returns true when the value was accepted and changed. */
     set(key, value) {
-      if (!KEYS.includes(key) || typeof value !== 'boolean' || current[key] === value) return false;
+      if (!validSetting(key, value) || current[key] === value) return false;
       current = { ...current, [key]: value };
       save();
       return true;
@@ -59,4 +60,4 @@ function overlaySupport(platform, env = {}) {
   return { session: wayland ? 'wayland' : 'x11', preferX11: wayland, cursorTracking: !wayland, forwardedMouse: false };
 }
 
-module.exports = { DEFAULTS, KEYS, normalize, createSettings, topLevel, shouldIgnoreMouse, overlaySupport };
+module.exports = { DEFAULTS, KEYS, validSetting, normalize, createSettings, topLevel, shouldIgnoreMouse, overlaySupport };
