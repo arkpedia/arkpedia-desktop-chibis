@@ -13,6 +13,8 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'arkchibi', privileges: { standa
 const MAX_REGIONS = maxChibis + 4;
 // win: the frameless, click-through overlay the chibis live in. panel: the ordinary picker window.
 let win, panel, tray, settings, regions = [], dragging = false, hovering = false, ignored = null, timer;
+// The overlay can restore before the picker subscribes to count updates.
+let chibiCount = 0;
 app.setName('Arkpedia Chibis Dev');
 // A data directory override keeps a test or portable copy from fighting the installed one.
 app.setPath('userData', process.env.ARKPEDIA_CHIBIS_DATA || path.join(app.getPath('appData'), 'Arkpedia Chibis Dev'));
@@ -193,7 +195,12 @@ else {
       if (entry && alive()) win.webContents.send('added', entry);
     });
     ipcMain.on('clear-chibis', e => { if (fromWindow(e, panel) && alive()) win.webContents.send('clear-chibis'); });
-    ipcMain.on('count', (e, value) => { if (fromWindow(e, win) && panelAlive() && Number.isInteger(value) && value >= 0 && value <= maxChibis) panel.webContents.send('count', value); });
+    ipcMain.on('get-count', e => { if (fromWindow(e, panel)) panel.webContents.send('count', chibiCount); });
+    ipcMain.on('count', (e, value) => {
+      if (!fromWindow(e, win) || !Number.isInteger(value) || value < 0 || value > maxChibis) return;
+      chibiCount = value;
+      if (panelAlive()) panel.webContents.send('count', chibiCount);
+    });
     ipcMain.on('minimize', e => { if (fromWindow(e, panel)) minimize(); });
     ipcMain.on('quit', e => { if (trusted(e)) app.quit(); });
     // The cursor poll is the fallback for platforms or moments without forwarded mousemove.
