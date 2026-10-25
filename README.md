@@ -62,6 +62,8 @@ Texture pages are uploaded premultiplied (`src/lib/spine/premultipliedTexture.ts
 
 ## Develop
 
+Past release notes are collected in [docs/releases](docs/releases/README.md).
+
 Node 24+.
 
 ```sh
