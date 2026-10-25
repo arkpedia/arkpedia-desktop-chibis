@@ -7,6 +7,9 @@ import type { ChibiModel } from './lib/operators/chibi';
 import { chibiActivities, chooseChibiTap } from './lib/operators/chibiRoutine';
 import { FURNITURE, furnitureBox } from './lib/operators/furniture';
 import './style.css';
+import ownershipNotice from '../NOTICE?raw';
+import appLicense from '../LICENSE?raw';
+import thirdPartyNotices from '../THIRD-PARTY-NOTICES.txt?raw';
 
 type Region = { x:number; y:number; width:number; height:number };
 type Settings = { alwaysOnTop:boolean; followSpaces:boolean; clickChibis:boolean; walkHorizontal:boolean; walkVertical:boolean; lockToScreen:boolean; rememberChibis:boolean };
@@ -157,6 +160,17 @@ function Modes({settings}:{settings:Settings|null}){
   </>;
 }
 
+function Credits(){
+  return <section className="credits" aria-label="About and credits">
+    <h2>About & credits</h2>
+    <p>Arkpedia Chibis is an unofficial, noncommercial Arknights fan project, made for fun. Free to use, with no paid features.</p>
+    <p>Arknights characters, artwork and animations belong to Hypergryph, Yostar and their respective rights holders. This app is not affiliated with or endorsed by them.</p>
+    <details><summary>Ownership, credits & rights contact</summary><pre>{ownershipNotice}</pre></details>
+    <details><summary>Application license</summary><pre>{appLicense}</pre></details>
+    <details><summary>Third-party software licenses</summary><pre>{thirdPartyNotices}</pre></details>
+  </section>;
+}
+
 /** The transparent, click-through window the chibis live in. No picker, no launcher. */
 function Overlay(){
   const [pets,setPets]=useState<Pet[]>([]),[settings,setSettings]=useState<Settings|null>(null),[displays,setDisplays]=useState<Area[]>([]),[stage,setStage]=useState<ChibiStage|null>(null);
@@ -213,12 +227,13 @@ function Panel(){
       ? <section className="settings">
           <Modes settings={settings}/>
           <button className="danger" onClick={()=>window.companion?.clearChibis()}>Remove every chibi from the desktop</button>
+          <Credits/>
         </section>
       : <>
           <input aria-label="Search chibis" placeholder="Search operator or outfit…" value={query} onChange={e=>setQuery(e.target.value)} />
           <div className="choices" aria-label="Available chibis">{matches.map(entry=><button key={entry.id} disabled={full} onClick={()=>window.companion?.addChibi(entry)}><span>{entry.name}</span><b>+</b></button>)}</div>
         </>}
-    <footer><span>{count?`${count} of ${MAX_CHIBIS} on your desktop`:'No chibis yet'}{full?' · Limit reached':''}</span></footer>
+    <footer><span>{count?`${count} of ${MAX_CHIBIS} on your desktop`:'No chibis yet'}{full?' · Limit reached':''}</span><span>Unofficial fan project</span></footer>
   </main>;
 }
 

@@ -16,6 +16,12 @@ body.role-panel .choices{flex:1;max-height:none}
 .settings{display:flex;flex-direction:column;gap:14px;flex:1;min-height:0;overflow-y:auto}
 .danger{color:#ff9b9b;border-color:#5c3a3a;background:#2a1a1a}
 .danger:hover{background:#3a2222;border-color:#ff9b9b}
+.credits{border-top:1px solid #3a565d;padding-top:14px;display:grid;gap:10px}
+.credits h2{font-size:16px;margin:0}
+.credits summary{cursor:pointer;color:#58dbca;font-size:12px;line-height:1.5}
+.credits summary:focus-visible{outline:2px solid #58dbca;outline-offset:3px}
+.credits pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.6 system-ui,sans-serif;color:#aabdc3;user-select:text}
+footer{flex-wrap:wrap}
 
 /* Furniture sits behind the chibi canvas, so the chibi is drawn on top of it. */
 .furniture{position:fixed;z-index:1;pointer-events:none;user-select:none;mask-size:100% 100%;mask-repeat:no-repeat;-webkit-mask-size:100% 100%;-webkit-mask-repeat:no-repeat}

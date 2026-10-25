@@ -1,9 +1,8 @@
 # Spine Runtimes 3.8 (spine-ts, WebGL)
 
-The official Spine runtime that draws the game's animated outfit art (dynamic illustrations)
-in the focused artwork view: `components/skins/DynamicArtwork.tsx` loads it with a dynamic
-`import()` when a reader presses Animated, so it is never part of a page's bundle
-(`scripts/tests/test-dynamic-art.ts` holds every page to that).
+The official Spine runtime used by the desktop app's shared WebGL stage to draw
+animated chibi models. The stage implementation is in
+`src/components/operators/ChibiStage.ts`.
 
 Arknights' skeletons are Spine 3.8.99, and only the 3.8 runtime reads them: the runtimes on
 npm are 4.x and refuse them.
@@ -23,4 +22,5 @@ npm are 4.x and refuse them.
 Nothing else. Do not modify these files unless a Spine licence is in force: the Spine Runtimes
 License (`LICENSE`, beside them) permits integrating and changing the runtimes only for holders
 of a Spine Editor licence, and any redistribution must carry that licence and copyright notice.
-The site shows the licence on `/credits` (Licences), linked from the nav's Community menu.
+The app shows the license under Settings → About & credits → Third-party software
+licenses. Build output includes `SPINE-LICENSE.txt` and `THIRD-PARTY-NOTICES.txt`.

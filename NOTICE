@@ -1,0 +1,34 @@
+Arkpedia Chibis - unofficial, noncommercial fan project
+
+Made for fun by fans of Arknights. Free to download and use; no paid features.
+Not affiliated with, endorsed by, sponsored by or authorized by Hypergryph,
+Studio Montagne, Yostar or Gryphline.
+
+Arknights is developed by Hypergryph / Studio Montagne. Arknights names,
+characters, artwork, models, textures, animations, furniture, trademarks and
+other game assets belong to their respective rights holders, including
+Hypergryph and Yostar. All rights to those materials remain with their owners.
+These credits are not a license or a claim of permission to use game assets.
+
+Artwork provenance
+The app's catalogue comes from arkpedia/arkpedia-data; its source revision
+is recorded in src/catalogue-source.json. Models and furniture are fetched
+from pinned revisions of arkpedia/arkpedia-sd-assets, not bundled artwork.
+The asset repository records sources and hashes in its manifests and NOTICE.md:
+https://github.com/arkpedia/arkpedia-sd-assets
+Its MIT license covers its original scripts only, not the game assets.
+
+Thanks to the community asset maintainers, including fexli/ArknightsResource,
+isHarryh/Ark-Models and ArknightsAssets/ArknightsAssets2, for organizing the
+source material. Credit to those projects does not imply their endorsement.
+
+Software credits
+Spine Runtimes 3.8 (spine-ts WebGL): Esoteric Software LLC.
+Electron: Electron contributors. React / React DOM: Meta and contributors.
+Full software license texts are in THIRD-PARTY-NOTICES.txt. The original Spine
+Runtimes license is also supplied as SPINE-LICENSE.txt. The Spine Editor
+license and runtime distribution requirements apply separately from game IP.
+
+Rights concerns and correction/removal requests:
+https://github.com/arkpedia/arkpedia-desktop-chibis/issues
+Please identify the material and your relationship to the rights holder.
