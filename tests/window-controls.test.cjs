@@ -255,3 +255,12 @@ test('the picker alone can request updates, library changes and desktop services
   ipcMain.emit('get-surfaces',trusted);assert.deepEqual(last(overlay.sent,'surfaces'),['surfaces',[]]);
   for(const channel of ['library-import','library-export','library-clear','library-download','update-action'])ipcMain.emit(channel,trusted,'install');
 });
+
+test('per-instance poses and placement persist without collapsing duplicate companions', async () => {
+  const first=await launch();
+  const rows=[{id:'char_1#1',preferences:{pose:'Sit',loop:true,furniture:false,props:false,fixed:true,flipped:false,size:180,offset:8,position:{x:300,y:220}}},{id:'char_1#1',preferences:{pose:'Sleep',loop:false}}];
+  first.ipcMain.emit('chibis-changed',first.trusted,rows);
+  const second=await launch({userData:first.userData});
+  second.ipcMain.emit('get-chibis',second.trusted);
+  assert.deepEqual(JSON.parse(JSON.stringify(second.overlay.sent.filter(([channel])=>channel==='chibis').at(-1))),['chibis',rows]);
+});

@@ -36,7 +36,7 @@ contextBridge.exposeInMainWorld('companion', {
   requestCount: () => ipcRenderer.send('get-count'),
   saveChibis: ids => ipcRenderer.send('chibis-changed', ids),
   getChibis: () => ipcRenderer.send('get-chibis'),
-  onChibis: subscribe('chibis', value => Array.isArray(value) ? value.filter(id => typeof id === 'string') : []),
+  onChibis: subscribe('chibis', value => Array.isArray(value) ? value.filter(row => typeof row === 'string' || (row && typeof row.id === 'string')) : []),
   setSetting: (key, value) => ipcRenderer.send('set-setting', key, value),
   requestServices: () => ipcRenderer.send('get-services'),
   requestSurfaces: () => ipcRenderer.send('get-surfaces'),

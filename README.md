@@ -33,6 +33,14 @@ Because the picker is just a window, minimizing it leaves the chibis walking; re
 
 Resting chibis use the same two pieces of furniture as the website: the **Black Retro Chair** for sitting and the **Porcelain Bed** for sleeping, fetched from `arkpedia-sd-assets` at a pinned commit together with their silhouette masks. Between walks a chibi sits, sleeps, idles or plays its special animation, chosen from whatever the model provides. **Settings → Remember my chibis** (on by default) saves the current set and restores it on the next launch; **Settings → Remove every chibi from the desktop** clears it. Artwork loads from pinned public Arkpedia SD assets, so the first load needs internet.
 
+## Per-chibi customization
+
+Hover or focus a chibi and open its gear button. **Animation** lists the clips supplied by that exact model. Choose a clip to keep the chibi in place while it plays; turn off **Loop animation** to hold its final pose, or use **Replay animation** to start it again. **Automatic** resumes the normal routine. **Keep in place** also lets an automatic idle stay where you drag it. Size, facing, vertical offset, pose, props and placement are remembered separately for each copy when **Remember my chibis** is enabled.
+
+For a chibi sitting on a window edge, choose **Sit** (if the model provides it), turn off **Chair / bed**, then drag the chibi to the edge and adjust **Vertical offset** if needed. Manual poses override gravity and wandering, so the chibi stays put. Manual placement works on every platform; it does not attach to or follow another window when that window moves. Existing automatic window-edge detection remains Windows-only.
+
+**Chair / bed** controls the added resting furniture. **Detached scenery (idle / walking)** controls separate decorations found in the model's idle pose. Special poses retain their authored props because some models incorporate the character into them; connected costume parts also remain intact. Neither toggle changes the character's reference scale. Oversized detached scenery is excluded from sizing and centering automatically for current and newly imported models.
+
 ## Overlay modes
 
 Settings also includes **15 / 30 / 60 FPS** limits, **Launch at login** (off by default), model-library management, and **Check for updates**. The frame limit applies to both rendering and companion movement calculations. Catalogue filters include model type, outfit brand, multiple search words, and downloaded-only models; the filters are remembered. Select up to 32 models using the catalogue checkboxes, then open **Library** to download them and their furniture assets.

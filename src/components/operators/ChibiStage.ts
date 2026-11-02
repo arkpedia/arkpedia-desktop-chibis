@@ -2,7 +2,7 @@ import type { spine as Spine } from '@/lib/vendor/spine-3.8/spine-webgl';
 import type { ChibiModel } from '@/lib/operators/chibi';
 import { chibiAtlas } from '@/lib/operators/chibiAtlas';
 import { chibiIdleAnimation } from '@/lib/operators/chibiRoutine';
-import { chibiClip, chibiPlacement, finiteBounds } from '@/lib/operators/chibiFraming';
+import { chibiClip, chibiPlacement, finiteBounds, chibiBodyFrame, hideDetachedScenery } from '@/lib/operators/chibiFraming';
 import type { ChibiBounds } from '@/lib/operators/chibiFraming';
 import { premultipliedTexture } from '@/lib/spine/premultipliedTexture';
 import { frameDue } from '@/lib/operators/desktopMotion';
@@ -11,7 +11,7 @@ import { assetUrl } from '@/lib/operators/library';
 type Runtime = typeof Spine;
 type Context = InstanceType<Runtime['webgl']['ManagedWebGLRenderingContext']>;
 
-export interface ChibiControl { moving: boolean; flipped: boolean; reaction: string; sequence: number; pose?: string; poseLoop?: boolean }
+export interface ChibiControl { moving: boolean; flipped: boolean; reaction: string; sequence: number; pose?: string; poseLoop?: boolean; furniture?: boolean; props?: boolean; offset?: number }
 export interface ChibiActorHooks {
   /** The chibi's hit box; the artwork is centred on it. */
   node: () => HTMLElement | null;
@@ -21,7 +21,7 @@ export interface ChibiActorHooks {
   /** A one-shot reaction finished. */
   complete: () => void;
 }
-interface Shared { data: Spine.SkeletonData; stateData: Spine.AnimationStateData; atlas: Spine.TextureAtlas; idle: string; walk?: string; bounds: ChibiBounds }
+interface Shared { data: Spine.SkeletonData; stateData: Spine.AnimationStateData; atlas: Spine.TextureAtlas; idle: string; walk?: string; bounds: ChibiBounds; props: number[] }
 interface Entry { users: number; loading: Promise<Shared>; shared?: Shared; disposed: boolean }
 interface Actor { hooks: ChibiActorHooks; skeleton?: Spine.Skeleton; state?: Spine.AnimationState; shared?: Shared; clip: string; sequence: number; loop: boolean }
 
@@ -142,7 +142,7 @@ export class ChibiStage {
       const names = data.animations.map(value => value.name);
       const idle = chibiIdleAnimation(data.animations) ?? (names.includes('Idle') ? 'Idle' : names[0]);
       const walk = names.find(name => /^(move|walk)$/i.test(name)) ?? names.find(name => /walk|move/i.test(name));
-      return { data, stateData, atlas, idle, walk, bounds: idleBounds(spine, data, stateData, idle) };
+      return { data, stateData, atlas, idle, walk, ...idleBounds(spine, data, stateData, idle) };
     } catch (error) { atlas.dispose(); throw error; }
   }
 
@@ -170,7 +170,7 @@ export class ChibiStage {
       if (!node) continue;
       const control = actor.hooks.control();
       const { clip, loop } = chibiClip(shared.data.animations.map(value => value.name), shared.idle, shared.walk, control.moving, control.reaction, control.pose, control.poseLoop);
-      if (clip !== actor.clip || loop !== actor.loop || (!loop && control.sequence !== actor.sequence)) {
+      if (clip !== actor.clip || loop !== actor.loop || control.sequence !== actor.sequence) {
         actor.clip = clip; actor.loop = loop; actor.sequence = control.sequence;
         state.setAnimation(0, clip, loop);
       }
@@ -184,10 +184,13 @@ export class ChibiStage {
       // Native Sit lowers the hips below standing ground, and Sleep is authored above the
       // mattress; lift those poses onto the furniture, as the website does (0.25 / 0.13 of
       // the idle pose's height).
-      const lift = control.pose ? (/^sit/i.test(control.pose) ? .25 : /^sleep/i.test(control.pose) ? .13 : 0) : 0;
-      skeleton.x = place.x; skeleton.y = place.y + lift * shared.bounds.height * place.scaleY; skeleton.scaleX = place.scaleX; skeleton.scaleY = place.scaleY;
+      const lift = control.furniture !== false && control.pose ? (/^sit/i.test(control.pose) ? .25 : /^sleep/i.test(control.pose) ? .13 : 0) : 0;
+      skeleton.x = place.x; skeleton.y = place.y + lift * shared.bounds.height * place.scaleY - (control.offset ?? 0); skeleton.scaleX = place.scaleX; skeleton.scaleY = place.scaleY;
       skeleton.updateWorldTransform();
+      const order = skeleton.drawOrder;
+      if (hideDetachedScenery(control.props !== false, clip, shared.idle, shared.walk)) skeleton.drawOrder = order.filter(slot => !shared.props.includes(slot.data.index));
       renderer.drawSkeleton(skeleton, true);
+      skeleton.drawOrder = order;
     }
     renderer.end();
   };
@@ -195,7 +198,7 @@ export class ChibiStage {
 
 /** The visible idle pose, measured once per model. Invisible effect slots can be much larger than
  * the character in the setup pose; including them makes bard chibis tiny. */
-function idleBounds(spine: Runtime, data: Spine.SkeletonData, stateData: Spine.AnimationStateData, idle: string): ChibiBounds {
+function idleBounds(spine: Runtime, data: Spine.SkeletonData, stateData: Spine.AnimationStateData, idle: string): { bounds: ChibiBounds; props: number[] } {
   const skeleton = new spine.Skeleton(data), state = new spine.AnimationState(stateData);
   skeleton.setToSetupPose();
   if (idle) state.setAnimation(0, idle, true);
@@ -204,6 +207,13 @@ function idleBounds(spine: Runtime, data: Spine.SkeletonData, stateData: Spine.A
   skeleton.drawOrder = order.filter(slot => slot.color.a >= .01);
   const origin = new spine.Vector2(), size = new spine.Vector2();
   skeleton.getBounds(origin, size, []);
+  const parts = skeleton.drawOrder.map(slot => {
+    skeleton.drawOrder = [slot];
+    const point = new spine.Vector2(), extent = new spine.Vector2();
+    skeleton.getBounds(point, extent, []);
+    return { index: slot.data.index, bounds: { x: point.x, y: point.y, width: extent.x, height: extent.y } };
+  });
   skeleton.drawOrder = order;
-  return finiteBounds({ x: origin.x, y: origin.y, width: size.x, height: size.y });
+  const frame = chibiBodyFrame(parts);
+  return { bounds: frame?.bounds ?? finiteBounds({ x: origin.x, y: origin.y, width: size.x, height: size.y }), props: frame?.props ?? [] };
 }

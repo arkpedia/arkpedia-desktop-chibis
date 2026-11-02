@@ -1,3 +1,5 @@
+import { DEFAULT_CHIBI_PREFERENCES, selectedPose, manualActivity, holdsPosition } from './lib/operators/chibiPreferences';
+import type { ChibiPreferences } from './lib/operators/chibiPreferences';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ChibiStage } from './components/operators/ChibiStage';
@@ -20,14 +22,15 @@ import thirdPartyNotices from '../THIRD-PARTY-NOTICES.txt?raw';
 type Region = { x:number; y:number; width:number; height:number };
 type Settings = { alwaysOnTop:boolean; followSpaces:boolean; clickChibis:boolean; walkHorizontal:boolean; walkVertical:boolean; lockToScreen:boolean; rememberChibis:boolean;fpsLimit:number;launchAtLogin:boolean;gravity:boolean;windowEdges:boolean };
 type Area = Region & { primary?: boolean };
-type Pet = { id:number; entry:Entry };
+type SavedChibi = string | { id:string; preferences?:Partial<ChibiPreferences> };
+type Pet = { id:number; entry:Entry; preferences?:Partial<ChibiPreferences> };
 declare global { interface Window { companion?: {
   regions: (r: Region[]) => void; dragging: (value:boolean) => void; hover: (value:boolean) => void; minimize: () => void; quit: () => void;
   onSettings: (callback:(value:Settings)=>void) => ()=>void; requestSettings: () => void; setSetting: (key:keyof Settings, value:boolean|number) => void;
   onDisplays: (callback:(value:Area[])=>void) => ()=>void; requestDisplays: () => void;
   addChibi: (entry:Entry) => void; onAdded: (callback:(entry:Entry)=>void) => ()=>void; onClear: (callback:()=>void) => ()=>void;
   clearChibis: () => void; reportCount: (count:number) => void; onCount: (callback:(count:number)=>void) => ()=>void; requestCount: () => void;
-  saveChibis: (ids:string[]) => void; getChibis: () => void; onChibis: (callback:(ids:string[])=>void) => ()=>void;
+  saveChibis: (ids:SavedChibi[]) => void; getChibis: () => void; onChibis: (callback:(ids:SavedChibi[])=>void) => ()=>void;
   onServices:(callback:(value:Services)=>void)=>()=>void; requestServices:()=>void;
   onSurfaces:(callback:(rows:Area[])=>void)=>()=>void;requestSurfaces:()=>void;
   onLibrary:(callback:(value:LibraryState)=>void)=>()=>void;requestLibrary:()=>void;downloadModels:(ids:string[])=>void;importModels:()=>void;exportModels:()=>void;clearDownloads:()=>void;removePack:(id:string)=>void;
@@ -64,9 +67,19 @@ const chooseRest=(animations:{name:string;duration:number}[])=>{
   return {activity:'idle' as const,clip:'',loop:true,duration:2200+Math.random()*2600};
 };
 
-function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;settings:Settings|null;displays:Area[]}) {
+function Walker({ pet, remove, settings, displays, customize }: {pet:Pet;remove:()=>void;settings:Settings|null;displays:Area[];customize:(preferences:ChibiPreferences)=>void}) {
   const stage = useContext(StageContext);
-  const [size,setSize]=useState(150), [paused,setPaused]=useState(false), [status,setStatus]=useState<'loading'|'ready'|'error'>('loading');
+  const [preferences,setPreferences]=useState<ChibiPreferences>(()=>({...DEFAULT_CHIBI_PREFERENCES,...pet.preferences}));
+  const [options,setOptions]=useState(false),[available,setAvailable]=useState<string[]>([]);
+  const preferenceRef=useRef(preferences);preferenceRef.current=preferences;
+  const customizeRef=useRef(customize);customizeRef.current=customize;
+  const savePosition=()=>{const next={...preferenceRef.current,position:{x:state.current.x,y:state.current.y}};setPreferences(next);customizeRef.current(next);};
+  const changePreference=(patch:Partial<ChibiPreferences>)=>{
+    const next={...preferenceRef.current,...patch,position:{x:state.current.x,y:state.current.y}};
+    preferenceRef.current=next;setPreferences(next);if(patch.size!==undefined)setSize(patch.size);customizeRef.current(next);setReaction('');
+    state.current.wait=0;state.current.resting=false;setRest(null);
+  };
+  const [size,setSize]=useState(pet.preferences?.size??150), [paused,setPaused]=useState(false), [status,setStatus]=useState<'loading'|'ready'|'error'>('loading');
   const [reaction,setReaction]=useState(''), [sequence,setSequence]=useState(0), [rest,setRest]=useState<'sit'|'sleep'|null>(null);
   const node=useRef<HTMLDivElement>(null), state=useRef({x:Math.random()*Math.max(1,innerWidth-220),y:Math.max(0,innerHeight-210),targetX:Math.random()*Math.max(1,innerWidth-220),targetY:Math.max(0,innerHeight-210),wait:0,resting:false});
   const velocity=useRef(0);
@@ -74,12 +87,13 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
   useEffect(()=>{const api=window.companion;if(!api)return;const off=api.onSurfaces(rows=>{surfaces.current=rows;});api.requestSurfaces();return off;},[]);
   const drag=useRef<{x:number;y:number;startX:number;startY:number;moved:boolean}|null>(null), config=useRef({size,paused,reaction,walkHorizontal:true,walkVertical:false,lockToScreen:true,displays:[] as Area[],fpsLimit:60,gravity:false,windowEdges:false}); config.current={size,paused,reaction,walkHorizontal:settings?.walkHorizontal??true,walkVertical:settings?.walkVertical??false,lockToScreen:settings?.lockToScreen!==false,displays,fpsLimit:settings?.fpsLimit??60,gravity:settings?.gravity??false,windowEdges:settings?.windowEdges??false};
   // Read by the stage every frame; mutated here without re-rendering.
-  const control=useRef({moving:true,flipped:false,reaction:'',sequence:0,pose:'',poseLoop:true}); control.current.reaction=reaction; control.current.sequence=sequence;
+  const control=useRef({moving:true,flipped:false,reaction:'',sequence:0,pose:'',poseLoop:true,furniture:true,props:true,offset:0}); control.current.reaction=reaction; control.current.sequence=sequence;
   const animations=useRef<{name:string;duration:number}[]>([]), firstTap=useRef(true), spawned=useRef(false), furniture=useRef<HTMLImageElement>(null), restKind=useRef<'sit'|'sleep'|null>(null); restKind.current=rest;
   useEffect(()=>{
     if(spawned.current||!displays.length)return;
     spawned.current=true;
     const s=state.current,area=displays.find(a=>a.primary)??displays[0];
+    if(preferenceRef.current.position){s.x=preferenceRef.current.position.x;s.y=preferenceRef.current.position.y;s.targetX=s.x;s.targetY=s.y;return;}
     s.x=area.x+Math.random()*Math.max(1,area.width-size); s.y=area.y+area.height-size*1.125;
     s.targetX=s.x; s.targetY=s.y;
   },[displays,size]);
@@ -87,7 +101,7 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
     if (!stage) return;
     return stage.add(pet.entry.model, {
       node: () => node.current, control: () => control.current,
-      ready: (names, durations) => { animations.current=names.map(name=>({name,duration:durations[name]??0})); setStatus('ready'); },
+      ready: (names, durations) => { animations.current=names.map(name=>({name,duration:durations[name]??0})); setAvailable(names);if(preferenceRef.current.pose&&!names.includes(preferenceRef.current.pose))changePreference({pose:''});setStatus('ready'); },
       failed: () => setStatus('error'), complete: () => setReaction(''),
     });
   },[stage,pet.entry.model]);
@@ -98,6 +112,11 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
       if(!frameDue(now,last,config.current.fpsLimit))return;
       const dt=Math.min(.1,(now-last)/1000);last=now;
       const c=config.current,s=state.current,m=control.current,width=c.size,height=c.size*1.125;
+      const pref=preferenceRef.current,pose=selectedPose(pref.pose,animations.current.map(a=>a.name));
+      const held=holdsPosition(pref.pose,pref.fixed);
+      m.furniture=pref.furniture;m.props=pref.props;m.offset=pref.offset;
+      if(held){m.moving=false;m.flipped=pref.flipped;m.pose=pose;m.poseLoop=pref.loop;}
+      const activity=pose?manualActivity(pose):restKind.current;
       // The visible idle pose has a 1.4 framing margin; align its feet, not the hit-box bottom.
       const footHeight=c.gravity?height*(.5+.5/1.4):height;
       const areas=c.displays.length?c.displays:[{x:0,y:0,width:innerWidth,height:innerHeight}];
@@ -110,12 +129,12 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
       s.targetX=c.walkHorizontal?Math.max(minX,Math.min(maxX,s.targetX)):s.x;
       s.targetY=c.walkVertical&&!c.gravity?Math.max(minY,Math.min(maxY,s.targetY)):s.y;
       let grounded=true;
-      if(c.gravity&&!drag.current&&!c.paused){
+      if(c.gravity&&!drag.current&&!c.paused&&!held){
         const result=fall(s.y,velocity.current,dt,s.x,width,footHeight,maxY+footHeight,c.windowEdges?surfaces.current:[]);
         s.y=result.y;velocity.current=result.velocity;grounded=result.grounded;s.targetY=s.y;
         if(!grounded){m.pose='';s.resting=false;if(restKind.current)setRest(null);}
       }else velocity.current=0;
-      if (grounded && !drag.current && !c.paused && !c.reaction && now>s.wait) {
+      if (!held && grounded && !drag.current && !c.paused && !c.reaction && now>s.wait) {
         const dx=s.targetX-s.x, dy=s.targetY-s.y, distance=Math.hypot(dx,dy);
         if (s.resting) {
           // The rest is over: stand up, then pick somewhere new to walk to.
@@ -138,27 +157,41 @@ function Walker({ pet, remove, settings, displays }: {pet:Pet;remove:()=>void;se
       } else m.moving=false;
       s.x=Math.max(0,Math.min(innerWidth-width,s.x));s.y=Math.max(0,Math.min(innerHeight-footHeight,s.y));
       if(node.current){node.current.style.left=`${s.x}px`;node.current.style.top=`${s.y}px`;}
-      const kind=restKind.current, seat=furniture.current;
+      const kind=activity, seat=furniture.current;
       if(kind&&seat){const box=furnitureBox(width,kind);seat.style.left=`${s.x}px`;seat.style.top=`${s.y+box.top}px`;seat.style.width=`${box.width}px`;seat.style.height=`${box.height}px`;seat.style.transform=m.flipped?'scaleX(-1)':'';}
     };
     // A drag released outside the window never reaches the element's pointerup.
-    const endDrag=()=>{if(drag.current){drag.current=null;window.companion?.dragging(false);}};
+    const endDrag=()=>{if(drag.current){drag.current=null;window.companion?.dragging(false);savePosition();}};
     window.addEventListener('pointerup',endDrag);window.addEventListener('pointercancel',endDrag);window.addEventListener('blur',endDrag);
     frame=requestAnimationFrame(step);return()=>{cancelAnimationFrame(frame);endDrag();window.removeEventListener('pointerup',endDrag);window.removeEventListener('pointercancel',endDrag);window.removeEventListener('blur',endDrag);};
   },[]);
-  function tap(){const next=chooseChibiTap(animations.current,firstTap.current);firstTap.current=false;if(next){setReaction(next.clip);setSequence(n=>n+1);}}
+  function tap(){if(preferenceRef.current.pose)return;const next=chooseChibiTap(animations.current,firstTap.current);firstTap.current=false;if(next){setReaction(next.clip);setSequence(n=>n+1);}}
+  const activity=selectedPose(preferences.pose,available)?manualActivity(preferences.pose):rest;
+  const optionsTop=Math.max(8,Math.min(innerHeight-440,state.current.y+size*1.125));
   // When clicks pass through chibis they stop being interactive, so main never takes the mouse.
   return <>
-    {rest&&<img className="furniture" ref={furniture} src={assetUrl(FURNITURE[rest].image)} alt="" aria-hidden="true" draggable={false}
-      style={{maskImage:`url(${assetUrl(FURNITURE[rest].mask)})`,WebkitMaskImage:`url(${assetUrl(FURNITURE[rest].mask)})`}}/>}
+    {activity&&preferences.furniture&&<img className="furniture" data-chibi={pet.id} ref={furniture} src={assetUrl(FURNITURE[activity].image)} alt="" aria-hidden="true" draggable={false}
+      style={{maskImage:`url(${assetUrl(FURNITURE[activity].mask)})`,WebkitMaskImage:`url(${assetUrl(FURNITURE[activity].mask)})`}}/>}
     <div className={`pet${settings?.clickChibis?'':' interactive'}${settings?.gravity?' gravity':''}`} ref={node} style={{width:size,height:size*1.125}} role="group" aria-label={`${pet.entry.name} desktop chibi`} tabIndex={0} title="Tap to interact · Drag to move"
-    onPointerDown={e=>{if(e.button!==0||(e.target as Element).closest('button'))return;e.preventDefault();setRest(null);restKind.current=null;control.current.pose='';const parent=node.current!;parent.focus();parent.setPointerCapture(e.pointerId);drag.current={x:e.clientX-state.current.x,y:e.clientY-state.current.y,startX:e.clientX,startY:e.clientY,moved:false};window.companion?.dragging(true);}}
+    onPointerDown={e=>{if(e.button!==0||(e.target as Element).closest('button,input,select,label'))return;e.preventDefault();setRest(null);restKind.current=null;control.current.pose='';const parent=node.current!;parent.focus();parent.setPointerCapture(e.pointerId);drag.current={x:e.clientX-state.current.x,y:e.clientY-state.current.y,startX:e.clientX,startY:e.clientY,moved:false};window.companion?.dragging(true);}}
     onPointerMove={e=>{const d=drag.current;if(!d)return;d.moved ||= Math.hypot(e.clientX-d.startX,e.clientY-d.startY)>5;state.current.x=e.clientX-d.x;state.current.y=e.clientY-d.y;}}
-    onPointerUp={e=>{const d=drag.current;drag.current=null;window.companion?.dragging(false);if(d&&!d.moved)tap();if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
+    onPointerUp={e=>{const d=drag.current;drag.current=null;window.companion?.dragging(false);if(d?.moved)savePosition();else if(d)tap();if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
     onPointerCancel={()=>{drag.current=null;window.companion?.dragging(false);}}
-    onKeyDown={e=>{if(e.target!==e.currentTarget)return;if(e.key==='Escape')remove();if(e.key==='Enter'||e.key===' '){e.preventDefault();tap();}if(e.key.startsWith('Arrow')){e.preventDefault();setPaused(true);state.current.x+=e.key==='ArrowLeft'?-20:e.key==='ArrowRight'?20:0;state.current.y+=e.key==='ArrowUp'?-20:e.key==='ArrowDown'?20:0;}}}>
+    onKeyDown={e=>{if(e.target!==e.currentTarget)return;if(e.key==='Escape')remove();if(e.key==='Enter'||e.key===' '){e.preventDefault();tap();}if(e.key.startsWith('Arrow')){e.preventDefault();setPaused(true);state.current.x+=e.key==='ArrowLeft'?-20:e.key==='ArrowRight'?20:0;state.current.y+=e.key==='ArrowUp'?-20:e.key==='ArrowDown'?20:0;savePosition();}}}>
     {status==='error'?<p role="status">This chibi could not load. Remove it and try again.</p>:status==='loading'?<p role="status">Loading chibi…</p>:null}
-    <div className="pet-controls"><button aria-label="Smaller" disabled={size<=80} onClick={()=>setSize(n=>Math.max(80,n-20))}>−</button><button aria-label={paused?'Resume':'Pause'} onClick={()=>setPaused(v=>!v)}>{paused?'▶':'Ⅱ'}</button><button aria-label="Larger" disabled={size>=300} onClick={()=>setSize(n=>Math.min(300,n+20))}>+</button><button aria-label="Remove chibi" onClick={remove}>×</button></div>
+    <div className="pet-controls"><button aria-label="Smaller" disabled={size<=80} onClick={()=>changePreference({size:Math.max(80,size-20)})}>−</button><button aria-label={paused?'Resume':'Pause'} onClick={()=>setPaused(v=>!v)}>{paused?'▶':'Ⅱ'}</button><button aria-label="Larger" disabled={size>=300} onClick={()=>changePreference({size:Math.min(300,size+20)})}>+</button><button aria-label="Customize chibi" aria-expanded={options} onClick={()=>setOptions(v=>!v)}>⚙</button><button aria-label="Remove chibi" onClick={remove}>×</button></div>
+    {options&&<section className={`pet-options${settings?.clickChibis?'':' interactive'}`} aria-label={`Customize ${pet.entry.name}`} style={{left:Math.max(8,Math.min(innerWidth-272,state.current.x)),top:optionsTop,maxHeight:innerHeight-optionsTop-8}}>
+      <header><strong>{pet.entry.name}</strong><button aria-label="Close customization" onClick={()=>setOptions(false)}>×</button></header>
+      <label>Animation<select aria-label="Animation" value={selectedPose(preferences.pose,available)} disabled={status!=='ready'} onChange={e=>changePreference({pose:e.target.value})}><option value="">Automatic</option>{available.map(name=><option key={name}>{name}</option>)}</select></label>
+      <button disabled={!preferences.pose} onClick={()=>setSequence(n=>n+1)}>Replay animation</button>
+      <label><input type="checkbox" checked={preferences.loop} disabled={!preferences.pose} onChange={e=>changePreference({loop:e.target.checked})}/> Loop animation</label>
+      <label><input type="checkbox" checked={preferences.fixed} onChange={e=>changePreference({fixed:e.target.checked})}/> Keep in place</label>
+      <label><input type="checkbox" checked={preferences.flipped} onChange={e=>changePreference({flipped:e.target.checked})}/> Face left (fixed poses)</label>
+      <label><input type="checkbox" checked={preferences.furniture} onChange={e=>changePreference({furniture:e.target.checked})}/> Chair / bed</label>
+      <label><input type="checkbox" checked={preferences.props} onChange={e=>changePreference({props:e.target.checked})}/> Detached scenery (idle / walking)</label>
+      <label>Vertical offset<input aria-label="Vertical offset" type="number" min={-100} max={100} value={preferences.offset} onChange={e=>changePreference({offset:Math.max(-100,Math.min(100,Number(e.target.value)))})}/></label>
+      <p>Choose Sit and turn off Chair / bed, then drag onto a window edge. A chosen animation stays in place; turn off Loop to hold its final pose.</p>
+    </section>}
     </div>
   </>;
 }
@@ -210,12 +243,12 @@ function Overlay(){
   useEffect(()=>{const off=window.companion?.onAdded(entry=>setPets(rows=>rows.length>=MAX_CHIBIS?rows:[...rows,{id:++next.current,entry}]));return off;},[]);
   useEffect(()=>{const off=window.companion?.onClear(()=>setPets([]));return off;},[]);
   useEffect(()=>{
-    let models=baseEntries,saved:string[]|null=null,ready=false;
+    let models=baseEntries,saved:SavedChibi[]|null=null,ready=false;
     const restore=()=>{
       if(hydrated.current||!ready||saved===null)return;
       hydrated.current=true;
-      const restored=saved.map(id=>models.find(row=>row.id===id)).filter((row):row is Entry=>!!row);
-      setPets(rows=>{const seen=new Set(rows.map(row=>row.entry.id));return [...rows,...restored.filter(row=>!seen.has(row.id)).slice(0,Math.max(0,MAX_CHIBIS-rows.length)).map(entry=>({id:++next.current,entry}))];});
+      const restored=saved.flatMap(row=>{const entry=models.find(e=>e.id===(typeof row==='string'?row:row.id));return entry?[{entry,preferences:typeof row==='string'?undefined:row.preferences}]:[];});
+      setPets(rows=>[...rows,...restored.slice(0,Math.max(0,MAX_CHIBIS-rows.length)).map(row=>({id:++next.current,...row}))]);
     };
     const offLibrary=window.companion?.onLibrary(value=>{models=[...baseEntries,...value.entries];ready=true;restore();});
     const off=window.companion?.onChibis(ids=>{
@@ -225,7 +258,7 @@ function Overlay(){
     window.companion?.getChibis();
     return ()=>{off?.();offLibrary?.();};
   },[]);
-  useEffect(()=>{if(hydrated.current)window.companion?.saveChibis(pets.map(pet=>pet.entry.id));},[pets]);
+  useEffect(()=>{if(hydrated.current)window.companion?.saveChibis(pets.map(pet=>({id:pet.entry.id,preferences:pet.preferences})));},[pets]);
   useEffect(()=>{window.companion?.reportCount(pets.length);},[pets.length]);
   useEffect(()=>{
     // Only .interactive boxes: a chibi's controls sit inside its own box and stop being
@@ -238,7 +271,7 @@ function Overlay(){
     return()=>{clearInterval(id);document.removeEventListener('mousemove',move);};
   },[]);
   return <><canvas className="stage" ref={canvas} aria-hidden="true"/>
-  <StageContext.Provider value={stage}>{pets.map(pet=><Walker key={pet.id} pet={pet} settings={settings} displays={displays} remove={()=>setPets(rows=>rows.filter(row=>row.id!==pet.id))}/>)}</StageContext.Provider></>;
+  <StageContext.Provider value={stage}>{pets.map(pet=><Walker key={pet.id} pet={pet} settings={settings} displays={displays} customize={preferences=>setPets(rows=>rows.map(row=>row.id===pet.id?{...row,preferences}:row))} remove={()=>setPets(rows=>rows.filter(row=>row.id!==pet.id))}/>)}</StageContext.Provider></>;
 }
 
 /** The picker: a normal window that can be minimized without touching the chibis. */
