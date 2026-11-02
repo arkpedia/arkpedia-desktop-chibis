@@ -41,3 +41,30 @@ export function chibiClip(names: readonly string[], idle: string, walk: string |
   if (pose && names.includes(pose)) return { clip: pose, loop: poseLoop };
   return { clip: idle, loop: !/die|retreat|start|begin|end/i.test(idle) };
 }
+
+/** Slot indices in the main connected body; detached scenery remains optional artwork. */
+export function chibiBodyFrame(parts: { index: number; bounds: ChibiBounds }[]): { bounds: ChibiBounds; props: number[] } | undefined {
+  const valid = parts.filter(({bounds:b}) => [b.x,b.y,b.width,b.height].every(Number.isFinite) && b.width>0 && b.height>0);
+  const remaining=[...valid];
+  let best:typeof valid=[];
+  while(remaining.length){
+    const group=[remaining.pop()!];
+    for(let i=0;i<group.length;i++)for(let j=remaining.length-1;j>=0;j--){
+      const a=group[i].bounds,b=remaining[j].bounds;
+      if(a.x<=b.x+b.width&&a.x+a.width>=b.x&&a.y<=b.y+b.height&&a.y+a.height>=b.y)group.push(remaining.splice(j,1)[0]);
+    }
+    if(group.length>best.length)best=group;
+  }
+  if(!best.length)return undefined;
+  const union=(rows:typeof valid):ChibiBounds=>{
+    const x=Math.min(...rows.map(p=>p.bounds.x)), y=Math.min(...rows.map(p=>p.bounds.y));
+    return {x,y,width:Math.max(...rows.map(p=>p.bounds.x+p.bounds.width))-x,height:Math.max(...rows.map(p=>p.bounds.y+p.bounds.height))-y};
+  };
+  const body=union(best), full=union(valid), keep=new Set(best.map(p=>p.index));
+  return {bounds:Math.max(full.width/body.width,full.height/body.height)>1.5?body:full,props:valid.filter(p=>!keep.has(p.index)).map(p=>p.index)};
+}
+
+/** Other clips may put the character itself in a prop attachment; retain their authored art. */
+export function hideDetachedScenery(show: boolean, clip: string, idle: string, walk?: string): boolean {
+  return !show && (clip === idle || clip === walk);
+}

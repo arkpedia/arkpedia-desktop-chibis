@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, screen, protocol, net, session, dialog, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { savedChibis } = require(path.join(__dirname, 'chibi-state.cjs'));
 const { pathToFileURL } = require('node:url');
 // Absolute paths: the tests run this file in a vm whose require resolves from tests/.
 const { validSetting, createSettings, topLevel, shouldIgnoreMouse, overlaySupport } = require(path.join(__dirname, 'settings.cjs'));
@@ -14,8 +15,8 @@ const support = overlaySupport(process.platform, process.env);
 if (support.preferX11 && !process.argv.some(arg => arg.startsWith('--ozone-platform'))) app.commandLine.appendSwitch('ozone-platform', 'x11');
 const { maxChibis } = require(path.join(__dirname, 'limits.json'));
 protocol.registerSchemesAsPrivileged([{ scheme: 'arkchibi', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
-// One hit box per chibi, plus a little slack. The picker is a separate window and never a region.
-const MAX_REGIONS = maxChibis + 4;
+// Each chibi can also open a customization region. The picker stays in its own window.
+const MAX_REGIONS = maxChibis * 2 + 4;
 // win: the frameless, click-through overlay the chibis live in. panel: the ordinary picker window.
 let win, panel, tray, settings, regions = [], dragging = false, hovering = false, ignored = null, timer;
 // The overlay can restore before the picker subscribes to count updates.
@@ -31,7 +32,7 @@ const CHIBIS_FILE = path.join(app.getPath('userData'), 'chibis.json');
 const readChibis = () => {
   try {
     const value = JSON.parse(fs.readFileSync(CHIBIS_FILE, 'utf8'));
-    return Array.isArray(value) ? value.filter(id => typeof id === 'string' && id.length <= 200).slice(0, maxChibis) : [];
+    return savedChibis(value, maxChibis);
   } catch { return []; }
 };
 const writeChibis = ids => {
@@ -234,7 +235,7 @@ else {
     ipcMain.on('update-action',(e,action)=>{if(!fromWindow(e,panel))return;if(action==='check')void updates.check();if(action==='download')void updates.download();if(action==='install')updates.install();if(action==='open')void updates.open();});
     ipcMain.on('chibis-changed', (e, ids) => {
       if (!fromWindow(e, win) || !Array.isArray(ids)) return;
-      const clean = ids.filter(id => typeof id === 'string' && id.length <= 200).slice(0, maxChibis);
+      const clean = savedChibis(ids, maxChibis);
       if (settings.get().rememberChibis) writeChibis(clean);
     });
     ipcMain.on('set-setting', (e, key, value) => { if (trusted(e) && validSetting(key,value)) change(key, value); });

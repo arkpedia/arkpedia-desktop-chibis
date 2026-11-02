@@ -70,3 +70,21 @@ test('unmeasurable poses fall back to a sane box', () => {
   assert.equal(finiteBounds({ x: Infinity, y: 0, width: 1, height: 1 }).height, 300);
   assert.ok(Number.isFinite(chibiScale({ x: 0, y: 0, width: NaN, height: NaN }, 150, 168)));
 });
+
+test('detached scenery cannot shrink or shift the body, while still being available as a prop', async () => {
+  const {chibiBodyFrame}=await import('../src/lib/operators/chibiFraming.ts');
+  const parts=[{index:0,bounds:{x:-200,y:0,width:200,height:300}},{index:1,bounds:{x:-100,y:250,width:190,height:200}}];
+  const normal=chibiBodyFrame(parts);
+  const decorated=chibiBodyFrame([...parts,{index:2,bounds:{x:-965,y:-52,width:374,height:548}}]);
+  assert.deepEqual(decorated.bounds,normal.bounds);
+  assert.deepEqual(decorated.props,[2]);
+  assert.deepEqual(chibiPlacement(decorated.bounds,box,900,false),chibiPlacement(normal.bounds,box,900,false));
+});
+
+test('props needed by a special pose cannot disappear with the idle scenery toggle', async () => {
+  const {hideDetachedScenery}=await import('../src/lib/operators/chibiFraming.ts');
+  assert.equal(hideDetachedScenery(false,'Relax','Relax','Move'),true);
+  assert.equal(hideDetachedScenery(false,'Move','Relax','Move'),true);
+  for(const pose of ['Sit','Sleep','Interact','Special'])assert.equal(hideDetachedScenery(false,pose,'Relax','Move'),false);
+  assert.equal(hideDetachedScenery(true,'Relax','Relax','Move'),false);
+});
