@@ -10,21 +10,28 @@ function createLibrary({directory,catalogue,fetch,extras=[],changed=()=>{}}) {
   const cache=path.join(directory,'cache'), packs=path.join(directory,'packs');
   const entries=new Map(catalogue.map(row=>[row.id,row])), resources=new Map(), pending=new Map();
   let state={entries:[],downloaded:[],bytes:0,busy:false,completed:0,total:0}, mutating=false;
+  let available=new Set();
   const publish=patch=>{state={...state,...patch};changed({...state});};
+  const publishAvailability=bytes=>publish({bytes,downloaded:[...entries.values()].filter(row=>[...filesOf(row),...(row.id.startsWith('import:')?[]:extras)].every(url=>available.has(url))).map(row=>row.id),entries:[...entries.values()].filter(row=>row.id.startsWith('import:'))});
+  let writeQueue=Promise.resolve();
+  const writes=action=>{const next=writeQueue.then(action);writeQueue=next.catch(()=>{});return next;};
   for(const url of [...new Set([...catalogue.flatMap(filesOf),...extras])]) {
     // Only immutable assets explicitly present in the bundled catalogue are fetched.
     if(!/^https:\/\/raw\.githubusercontent\.com\/arkpedia\/arkpedia-sd-assets\/[a-f0-9]{40}\//.test(url)) throw Error('Catalogue contains an unpinned asset');
     resources.set(url,{file:path.join(cache,digest(url)),type:mime(url),remote:url});
   }
-  const refresh=async()=>{
+  // Disk reconciliation shares the mutation queue so it cannot publish a stale
+  // byte count while an import or download is committing files.
+  const scanDisk=async()=>{
     let bytes=0;
     const existing=new Set();
     const cached=new Set(await fs.readdir(cache).catch(()=>[])),counted=new Set();
     for(const name of cached)if(/^[a-f0-9]{64}$/.test(name)){const file=path.join(cache,name);try{bytes+=(await fs.stat(file)).size;counted.add(file);}catch{}}
     for(const [key,resource] of resources) {if(resource.remote&&!cached.has(path.basename(resource.file)))continue;try{const stat=await fs.stat(resource.file);if(stat.isFile()){existing.add(key);if(!counted.has(resource.file)){bytes+=stat.size;counted.add(resource.file);}}}catch{}}
     // Resources may be shared by many entries; each file is counted once.
-    publish({bytes,downloaded:[...entries.values()].filter(row=>[...filesOf(row),...(row.id.startsWith('import:')?[]:extras)].every(url=>existing.has(url))).map(row=>row.id),entries:[...entries.values()].filter(row=>row.id.startsWith('import:'))});
+    available=existing;publishAvailability(bytes);
   };
+  const refresh=()=>writes(scanDisk);
   const init=async()=>{
     await fs.mkdir(cache,{recursive:true}); await fs.mkdir(packs,{recursive:true});
     for(const name of await fs.readdir(packs)) {
@@ -52,6 +59,7 @@ function createLibrary({directory,catalogue,fetch,extras=[],changed=()=>{}}) {
     try{await fs.access(resource.file);return resource;}catch{}
     if(!resource.remote)throw Error('Imported model file is missing');
     if(pending.has(url))return pending.get(url);
+    const wasAvailable=available.has(url);
     const work=(async()=>{
       const response=await fetch(resource.remote,{signal:AbortSignal.timeout(60000)});
       if(!response.ok||!response.body)throw Error('Asset download failed');
@@ -61,19 +69,20 @@ function createLibrary({directory,catalogue,fetch,extras=[],changed=()=>{}}) {
       if(!size)throw Error('Empty model file');
       // Serialize writes and measure actual disk usage to enforce the shared quota.
       await writes(async()=>{
+        // A file removed outside the library must stop contributing its old size
+        // before its replacement is charged to the quota.
+        if(wasAvailable)await scanDisk();
         if(state.bytes+size>MAX_CACHE)throw Error('Library limit is 1 GB. Clear downloaded cache to make room.');
         const temporary=resource.file+'.tmp';await fs.writeFile(temporary,Buffer.concat(chunks));await fs.rename(temporary,resource.file);
-        publish({bytes:state.bytes+size});
+        available.add(url);publishAvailability(state.bytes+size);
       });
       return resource;
     })();
     pending.set(url,work);try{return await work;}finally{pending.delete(url);}
   };
-  let writeQueue=Promise.resolve();
-  const writes=action=>{const next=writeQueue.then(action);writeQueue=next.catch(()=>{});return next;};
   return {
     init,get:()=>({...state}),
-    async response(url){try{const resource=await ensure(url);const bytes=await fs.readFile(resource.file);if(!pending.size)await refresh();return new Response(bytes,{headers:{'Content-Type':resource.type}});}catch{return new Response('Asset unavailable',{status:503});}},
+    async response(url){try{const resource=await ensure(url);const bytes=await fs.readFile(resource.file);return new Response(bytes,{headers:{'Content-Type':resource.type}});}catch{return new Response('Asset unavailable',{status:503});}},
     async download(ids){
       if(mutating||!Array.isArray(ids)||ids.length>32)return;
       const selected=ids.map(id=>entries.get(id)).filter(Boolean);if(!selected.length)return;
@@ -85,19 +94,19 @@ function createLibrary({directory,catalogue,fetch,extras=[],changed=()=>{}}) {
     async clear(){
       if(mutating||pending.size){publish({error:'Wait for model loading or library operations to finish before clearing the cache.'});return;}
       mutating=true;publish({busy:true,completed:0,total:0,error:undefined});
-      try{await fs.rm(cache,{recursive:true,force:true});await fs.mkdir(cache,{recursive:true});await refresh();}
+      try{await writes(async()=>{await fs.rm(cache,{recursive:true,force:true});await fs.mkdir(cache,{recursive:true});await scanDisk();});}
       catch(error){publish({error:error.message});}finally{mutating=false;publish({busy:false});}
     },
     async removePack(entryId){
       if(mutating||!entries.has(entryId)||!/^import:[a-f0-9]{64}:\d+$/.test(entryId))return;
       const id=entryId.split(':')[1];mutating=true;publish({busy:true,completed:0,total:0,error:undefined});
-      try{
+      try{await writes(async()=>{
         await fs.rm(path.join(packs,id),{recursive:true,force:true});
         for(const [key,entry] of entries)if(key.startsWith(`import:${id}:`)){for(const url of filesOf(entry))resources.delete(url);entries.delete(key);}
         // Restore normal remote lookup for furniture supplied by this pack.
         for(const url of extras){const current=resources.get(url);if(current?.file.startsWith(path.join(packs,id)+path.sep))resources.set(url,{file:path.join(cache,digest(url)),type:mime(url),remote:url});}
-        await refresh();
-      }catch(error){publish({error:error.message});}finally{mutating=false;publish({busy:false});}
+        await scanDisk();
+      });}catch(error){publish({error:error.message});}finally{mutating=false;publish({busy:false});}
     },
     async importPack(folder){
       if(mutating)return;mutating=true;publish({busy:true,completed:0,total:0,error:undefined});
@@ -128,11 +137,13 @@ function createLibrary({directory,catalogue,fetch,extras=[],changed=()=>{}}) {
         for(const file of files){const actual=await fs.realpath(path.join(root,file));if(!actual.startsWith(root+path.sep))throw Error('Model file escapes the pack folder');const stat=await fs.stat(actual);if(!stat.isFile()||!stat.size||stat.size>MAX_FILE)throw Error('Model file must be between 1 byte and 64 MB');size+=stat.size;if(size>MAX_CACHE)throw Error('Model pack exceeds 1 GB');hash.update(await fs.readFile(actual));verified.push([file,actual]);}
         const id=hash.digest('hex'),finalPath=path.join(packs,id);
         try{await fs.access(path.join(finalPath,'manifest.json'));await refresh();return;}catch(error){if(error.code!=='ENOENT')throw error;}
-        await refresh();if(state.bytes+size>MAX_CACHE)throw Error('Library limit is 1 GB. Clear downloaded cache to make room.');
-        destination=path.join(packs,`.importing-${crypto.randomUUID()}`);
-        await fs.mkdir(path.join(destination,'assets'),{recursive:true});
-        for(const [file,actual] of verified)await fs.copyFile(actual,path.join(destination,file));
-        await fs.writeFile(path.join(destination,'manifest.json'),text);await fs.rename(destination,finalPath);registerPack(id,pack);destination=undefined;await refresh();
+        await writes(async()=>{
+          await scanDisk();if(state.bytes+size>MAX_CACHE)throw Error('Library limit is 1 GB. Clear downloaded cache to make room.');
+          destination=path.join(packs,`.importing-${crypto.randomUUID()}`);
+          await fs.mkdir(path.join(destination,'assets'),{recursive:true});
+          for(const [file,actual] of verified)await fs.copyFile(actual,path.join(destination,file));
+          await fs.writeFile(path.join(destination,'manifest.json'),text);await fs.rename(destination,finalPath);registerPack(id,pack);destination=undefined;await scanDisk();
+        });
       }catch(error){if(destination)await fs.rm(destination,{recursive:true,force:true});publish({error:error.message});}
       finally{mutating=false;publish({busy:false});}
     },
