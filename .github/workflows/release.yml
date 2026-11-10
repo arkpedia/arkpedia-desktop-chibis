@@ -14,7 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          # Keep dual-architecture packages off the capacity-constrained ARM pool.
+          - os: macos-26-intel
             script: package:mac
           - os: windows-latest
             script: package:win
