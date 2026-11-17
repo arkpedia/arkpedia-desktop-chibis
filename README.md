@@ -43,7 +43,7 @@ For a chibi sitting on a window edge, choose **Sit** (if the model provides it),
 
 ## Overlay modes
 
-Settings also includes **15 / 30 / 60 FPS** limits, **Launch at login** (off by default), model-library management, and **Check for updates**. The frame limit applies to both rendering and companion movement calculations. Catalogue filters include model type, outfit brand, multiple search words, and downloaded-only models; the filters are remembered. Select up to 32 models using the catalogue checkboxes, then open **Library** to download them and their furniture assets.
+Settings also includes **15 / 30 / 60 FPS** limits, **Launch at login** (off by default), model-library management, and **Check for updates**. The frame limit applies to both rendering and companion movement calculations. Catalogue filters include model type, outfit brand, multiple search words, and downloaded-only models; the filters are remembered. Select up to 32 models using the catalogue checkboxes, then open **Download models** to download them and their furniture assets in a dedicated dialog. The dialog also contains model-pack import/export and cache controls; app settings stay separate.
 
 The library stores immutable models in the app's user-data directory, with a 1 GB limit and a 64 MB per-file limit. Loading a model also caches it; explicit downloads include both pieces of furniture and their masks. Import/export and clear-cache actions are available in Settings. See [model packs and platform support](docs/desktop-features.md).
 

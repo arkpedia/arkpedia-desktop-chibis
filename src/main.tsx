@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { ChibiStage } from './components/operators/ChibiStage';
 import catalogue from './catalogue.json';
 import metadata from './catalogue-metadata.json';
-import { DesktopTools } from './DesktopTools';
+import { DesktopTools, DownloadDialog } from './DesktopTools';
 import type { UpdateState,Services } from './DesktopTools';
 import { assetUrl,matchesEntry,readCatalogueFilters } from './lib/operators/library';
 import type { LibraryState,Entry } from './lib/operators/library';
@@ -278,6 +278,7 @@ function Overlay(){
 function Panel(){
   const [savedFilters]=useState(()=>readCatalogueFilters(localStorage));
   const [query,setQuery]=useState(''),[settings,setSettings]=useState<Settings|null>(null),[count,setCount]=useState(0),[view,setView]=useState<'list'|'settings'>('list');
+  const [downloadsOpen,setDownloadsOpen]=useState(false);
   const [library,setLibrary]=useState<LibraryState>(emptyLibrary),[selected,setSelected]=useState<string[]>([]),[kind,setKind]=useState(savedFilters.kind),[brand,setBrand]=useState(savedFilters.brand),[downloadedOnly,setDownloadedOnly]=useState(savedFilters.downloadedOnly),[visible,setVisible]=useState(60),[services,setServices]=useState<Services>({loginSupported:false});
   useEffect(()=>{const off=window.companion?.onSettings(setSettings);window.companion?.requestSettings();return off;},[]);
   useEffect(()=>{const off=window.companion?.onCount(setCount);window.companion?.requestCount();return off;},[]);
@@ -298,7 +299,7 @@ function Panel(){
     {settingsView
       ? <section className="settings">
           <Modes settings={settings} services={services}/>
-          <DesktopTools library={library} selected={selected}/>
+          <DesktopTools/>
           <button className="danger" onClick={()=>window.companion?.clearChibis()}>Remove every chibi from the desktop</button>
           <Credits/>
         </section>
@@ -309,9 +310,11 @@ function Panel(){
             <select aria-label="Outfit brand" value={brand} onChange={e=>setBrand(e.target.value)}><option value="">All outfit brands</option>{brands.map(name=><option key={name}>{name}</option>)}</select>
             <label><input type="checkbox" checked={downloadedOnly} onChange={e=>setDownloadedOnly(e.target.checked)}/> Downloaded only</label>
           </div>
-          <div className="library-shortcut"><span>{matches.length} matches</span><button onClick={()=>setView('settings')}>Library {selected.length?`(${selected.length} selected)`:''}</button></div>
-          <div className="choices" aria-label="Available chibis">{matches.slice(0,visible).map(entry=><div className="choice-row" key={entry.id}><input type="checkbox" aria-label={`Select ${entry.name} for offline download`} checked={selected.includes(entry.id)} disabled={!selected.includes(entry.id)&&selected.length>=32} onChange={e=>setSelected(rows=>e.target.checked?[...rows,entry.id]:rows.filter(id=>id!==entry.id))}/><button disabled={full} onClick={()=>window.companion?.addChibi(entry)}><span>{entry.name}{entry.brand&&<small>{entry.brand}</small>}{library.downloaded.includes(entry.id)&&<small>Downloaded</small>}</span><b>+</b></button></div>)}{!matches.length&&<p>No matching models. Enemy and illustration packs can be added through Import model pack.</p>}{matches.length>visible&&<button onClick={()=>setVisible(value=>value+60)}>Show more ({matches.length-visible} remaining)</button>}</div>
+          <div className="library-shortcut"><span>{matches.length} matches</span><button aria-haspopup="dialog" onClick={()=>setDownloadsOpen(true)}>Download models{selected.length?` (${selected.length})`:''}</button></div>
+          <p id="download-selection-hint">Select checkboxes for offline download. + adds a chibi to your desktop.</p>
+          <div className="choices" aria-label="Available chibis" aria-describedby="download-selection-hint">{matches.slice(0,visible).map(entry=><div className="choice-row" key={entry.id}><input type="checkbox" aria-label={`Select ${entry.name} for offline download`} title="Select for offline download" checked={selected.includes(entry.id)} disabled={!selected.includes(entry.id)&&selected.length>=32} onChange={e=>setSelected(rows=>e.target.checked?[...rows,entry.id]:rows.filter(id=>id!==entry.id))}/><button disabled={full} title={`Add ${entry.name} to desktop`} onClick={()=>window.companion?.addChibi(entry)}><span>{entry.name}{entry.brand&&<small>{entry.brand}</small>}{library.downloaded.includes(entry.id)&&<small>Downloaded</small>}</span><b>+</b></button></div>)}{!matches.length&&<p>No matching models. Enemy and illustration packs can be added through Import model pack.</p>}{matches.length>visible&&<button onClick={()=>setVisible(value=>value+60)}>Show more ({matches.length-visible} remaining)</button>}</div>
         </>}
+    {downloadsOpen&&<DownloadDialog library={library} selected={selected} onClose={()=>setDownloadsOpen(false)}/>}
     <footer><span>{count?`${count} of ${MAX_CHIBIS} on your desktop`:'No chibis yet'}{full?' · Limit reached':''}</span><span>Unofficial fan project</span></footer>
   </main>;
 }
