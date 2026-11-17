@@ -1,7 +1,7 @@
 import type { ChibiModel } from './chibi';
 export type Entry = { id:string; name:string; model:ChibiModel; kind?:'operator'|'outfit'|'enemy'|'illustration'; brand?:string };
 export type LibraryState = { entries:Entry[]; downloaded:string[]; bytes:number; busy:boolean; completed:number; total:number; error?:string };
-export const assetUrl = (url:string) => location.protocol === 'arkchibi:' && !url.startsWith('arkchibi:') ? `arkchibi://app/assets/${encodeURIComponent(url)}` : url;
+export const assetUrl = (url:string) => location.protocol === 'arkchibi:' && !url.startsWith('arkchibi:') ? `arkchibi://app/models/${encodeURIComponent(url)}` : url;
 
 export function matchesEntry(row:Entry, query:string, kind:string, brand:string) {
   const category = row.kind ?? (row.id.includes('@') ? 'outfit' : 'operator');

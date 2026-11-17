@@ -178,8 +178,8 @@ else {
     const root = path.join(__dirname, '..', 'dist');
     protocol.handle('arkchibi', req => {
       const url = new URL(req.url);
-      if(url.host==='app'&&url.pathname.startsWith('/assets/')) {
-        return libraryReady.then(()=>library.response(decodeURIComponent(url.pathname.slice('/assets/'.length))));
+      if(url.host==='app'&&url.pathname.startsWith('/models/')) {
+        return libraryReady.then(()=>library.response(decodeURIComponent(url.pathname.slice('/models/'.length))));
       }
       const file = path.resolve(root, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
       if (url.host !== 'app' || !file.startsWith(root + path.sep)) return new Response('Not found', { status: 404 });

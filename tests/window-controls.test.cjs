@@ -15,7 +15,7 @@ const stored = userData => JSON.parse(fs.readFileSync(path.join(userData, 'setti
 
 // Exercise the real main-process wiring: two windows, no desktop session.
 async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 400, y: 400 }, userData: reuse } = {}) {
-  let tray, poll;
+  let tray, poll, handleRequest;
   const windows = [];
   const userData = reuse ?? fs.mkdtempSync(path.join(os.tmpdir(), 'chibis-test-'));
   if (settings) fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify(settings));
@@ -58,7 +58,7 @@ async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 4
       getAllDisplays: () => [{ id: 1, workArea: { x: 0, y: 0, width: 1280, height: 720 } }],
       getCursorScreenPoint: () => cursor,
     }),
-    protocol: { registerSchemesAsPrivileged() {}, handle() {} }, net: {},
+    protocol: { registerSchemesAsPrivileged() {}, handle(_scheme, handler) { handleRequest = handler; } }, net: { fetch: url => new Response(fs.readFileSync(require('node:url').fileURLToPath(url))) },
     session: { defaultSession: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} } },
   };
   vm.runInNewContext(readFileSync(path.join(__dirname, '../electron/main.cjs'), 'utf8'), {
@@ -69,7 +69,7 @@ async function launch({ platform = 'darwin', env = {}, settings, cursor = { x: 4
   await new Promise(resolve => setImmediate(resolve));
   const [overlay, panel] = windows;
   const frame = window => ({ sender: window.webContents, senderFrame: window.webContents.mainFrame });
-  return { app, overlay, panel, windows, ipcMain, trusted: frame(overlay), panelTrusted: frame(panel), poll, item: label => tray.menu.find(entry => entry.label === label), userData, switches, cursor };
+  return { handleRequest, app, overlay, panel, windows, ipcMain, trusted: frame(overlay), panelTrusted: frame(panel), poll, item: label => tray.menu.find(entry => entry.label === label), userData, switches, cursor };
 }
 
 test('chibis get a frameless full-screen overlay and the picker is a normal window', async () => {
@@ -263,4 +263,22 @@ test('per-instance poses and placement persist without collapsing duplicate comp
   const second=await launch({userData:first.userData});
   second.ipcMain.emit('get-chibis',second.trusted);
   assert.deepEqual(JSON.parse(JSON.stringify(second.overlay.sent.filter(([channel])=>channel==='chibis').at(-1))),['chibis',rows]);
+});
+
+// Exercise the protocol used by packaged Vite output, rather than only window creation.
+test('bundled JavaScript and CSS bypass the model library and remain loadable', async t => {
+  const { handleRequest } = await launch();
+  const assets = path.join(__dirname, '../dist/assets');
+  fs.mkdirSync(assets, { recursive: true });
+  const fixtures = [['routing-regression.js', 'window.booted = true;'], ['routing-regression.css', 'body { color: white; }']];
+  for (const [name, content] of fixtures) {
+    const file = path.join(assets, name);
+    fs.writeFileSync(file, content);
+    t.after(() => fs.rmSync(file, { force: true }));
+    const response = await handleRequest({ url: `arkchibi://app/assets/${name}` });
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), content);
+  }
+  const rejected = await handleRequest({ url: 'arkchibi://app/models/' + encodeURIComponent('https://untrusted.invalid/model.skel') });
+  assert.equal(rejected.status, 503, 'model requests still use the library allowlist');
 });
